@@ -4,7 +4,7 @@ import { headers } from "next/headers";
 import { isAllowed } from "@/lib/auth";
 import { CommandPalette } from "@/components/CommandPalette";
 import { CurlyOrb } from "@/components/CurlyOrb";
-import { CurlyBar } from "@/components/shell/CurlyBar";
+import { FloatingNav } from "@/components/shell/FloatingNav";
 import { CurlyPanel } from "@/components/voice/CurlyPanel";
 import { RouteBeacon } from "@/components/voice/RouteBeacon";
 import { ToastProvider } from "@/components/ui/ToastProvider";
@@ -46,7 +46,7 @@ export default async function RootLayout({
           <ToastProvider>
             {children}
             {allowed && <CommandPalette />}
-            {allowed && <CurlyBar />}
+            {allowed && <FloatingNav />}
             {allowed && <CurlyOrb />}
             {allowed && <CurlyPanel />}
             {allowed && <RouteBeacon />}

@@ -1,11 +1,10 @@
-// Shell content frame. Navigation + Curly now live in the bottom Curly bar
-// (the Omnibar spine, mounted globally in the root layout), so the frame is just
-// the content region — full-bleed — reserving the spine's height at the bottom.
+// Shell content frame. Navigation is a floating top-left menu button
+// (FloatingNav) and Curly is a floating bottom-right orb — both mounted globally
+// in the root layout — so the frame is just the full-bleed content region.
 //
-// Non-full-height routes scroll the window with bottom padding so the last
-// content clears the fixed spine. Full-height routes (chat, surface) get a
-// definite height of (100dvh - spine) so their own internal scroll / centering
-// sits cleanly ABOVE the spine instead of being covered by it.
+// Full-height routes (chat, surface) fill the viewport so their own internal
+// scroll / centering works; normal routes scroll the window. On small screens a
+// little top padding keeps page headings clear of the floating menu button.
 export function ShellFrame({
   children,
   fullHeight = false,
@@ -16,16 +15,12 @@ export function ShellFrame({
   if (fullHeight) {
     return (
       <main
-        className="flex w-full flex-col overflow-hidden"
-        style={{ height: "calc(100dvh - var(--spine-h))" }}
+        className="flex w-full flex-col overflow-hidden max-sm:pt-14"
+        style={{ height: "100dvh" }}
       >
         {children}
       </main>
     );
   }
-  return (
-    <main className="min-h-screen w-full" style={{ paddingBottom: "var(--spine-h)" }}>
-      {children}
-    </main>
-  );
+  return <main className="min-h-screen w-full max-sm:pt-14">{children}</main>;
 }
