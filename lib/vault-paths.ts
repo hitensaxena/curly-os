@@ -36,3 +36,9 @@ export function isSettingsWriteable(rel: string): boolean {
 export function settingsRequiresConfirmation(rel: string): boolean {
   return REQUIRES_CONFIRMATION.has(rel);
 }
+
+// Build the /notes URL for a vault-relative path, encoding each segment so
+// titles/dates with spaces or special chars survive the catch-all route.
+export function noteHref(rel: string): string {
+  return "/notes/" + rel.split("/").map(encodeURIComponent).join("/");
+}

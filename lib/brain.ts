@@ -88,4 +88,34 @@ export const brain = {
     ),
   node: (id: string) =>
     call<BrainNode>(`/nodes/${encodeURI(id)}`, undefined, "GET"),
+  // List nodes newest-first (brain sorts updated_at DESC). Used by the dashboard.
+  nodes: (opts: { type?: string; limit?: number; offset?: number } = {}) => {
+    const p = new URLSearchParams();
+    if (opts.type) p.set("type", opts.type);
+    p.set("limit", String(opts.limit ?? 20));
+    p.set("offset", String(opts.offset ?? 0));
+    return call<BrainNode[]>(`/nodes?${p.toString()}`, undefined, "GET");
+  },
+  // Upsert a memory. A deterministic id ("mind:<rel>") makes re-saves idempotent
+  // so editing a note from the OS updates its brain node instead of duplicating.
+  ingest: (input: {
+    id?: string;
+    title: string;
+    content: string;
+    type?: string;
+    tags?: string[];
+    source_app?: string;
+    metadata?: Record<string, unknown>;
+    extract?: boolean;
+  }) =>
+    call<{ id?: string }>("/ingest", {
+      id: input.id,
+      type: input.type ?? "note",
+      title: input.title,
+      content: input.content,
+      tags: input.tags ?? [],
+      source_app: input.source_app ?? "curly-os",
+      metadata: input.metadata ?? {},
+      extract: input.extract ?? true,
+    }),
 };

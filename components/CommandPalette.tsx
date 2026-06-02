@@ -47,7 +47,11 @@ export function CommandPalette() {
 
   const items: Item[] = [
     { id: "home", label: "Home", hint: "dashboard", run: () => go("/") },
-    { id: "chat", label: "New chat with Curly", hint: "↵", run: () => go("/chat") },
+    { id: "search", label: "Search your mind", hint: "/search", run: () => go("/search") },
+    { id: "notes", label: "Browse notes", hint: "/notes", run: () => go("/notes") },
+    { id: "agent", label: "Agent command center", hint: "/agent", run: () => go("/agent") },
+    { id: "chat", label: "New chat with Curly", hint: "/chat", run: () => go("/chat") },
+    { id: "surface", label: "Voice surface", hint: "/surface", run: () => go("/surface") },
   ];
 
   const query = q.trim();
@@ -71,21 +75,32 @@ export function CommandPalette() {
           value={q}
           onChange={(e) => setQ(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === "Enter" && query) go("/chat");
+            if (e.key === "Enter" && query) go(`/search?q=${encodeURIComponent(query)}`);
           }}
-          placeholder="Ask Curly · search · jump anywhere…"
+          placeholder="Search your mind · jump anywhere · ask Curly…"
           className="w-full bg-transparent px-5 py-4 text-base text-foreground placeholder:text-muted outline-none"
         />
         <div className="max-h-80 overflow-y-auto border-t border-border py-2">
           {query && (
-            <button
-              onClick={() => go("/chat")}
-              className="flex w-full items-center gap-3 px-5 py-2.5 text-left hover:bg-surface-2"
-            >
-              <span className="text-accent">✦</span>
-              <span className="text-foreground">Ask Curly</span>
-              <span className="truncate text-muted">“{query}”</span>
-            </button>
+            <>
+              <button
+                onClick={() => go(`/search?q=${encodeURIComponent(query)}`)}
+                className="flex w-full items-center gap-3 px-5 py-2.5 text-left hover:bg-surface-2"
+              >
+                <span className="text-accent-2">⌕</span>
+                <span className="text-foreground">Search</span>
+                <span className="truncate text-muted">“{query}”</span>
+                <span className="ml-auto text-xs text-muted">↵</span>
+              </button>
+              <button
+                onClick={() => go("/chat")}
+                className="flex w-full items-center gap-3 px-5 py-2.5 text-left hover:bg-surface-2"
+              >
+                <span className="text-accent">✦</span>
+                <span className="text-foreground">Ask Curly</span>
+                <span className="truncate text-muted">“{query}”</span>
+              </button>
+            </>
           )}
           {filtered.map((i) => (
             <button

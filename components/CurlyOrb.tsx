@@ -8,26 +8,16 @@
 // an audio-reactive canvas aura; and the UI-intent reducer that feeds the Stage.
 // All browser APIs live inside handlers/effects (SSR-safe); every resource is torn
 // down on unmount; start() runs only from the user-gesture tap (autoplay policy).
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { Stage } from './stage/Stage';
-import type { GraphCard, GraphPayload, NavPayload, ShowPayload, StageCard, UIFrame, VoiceState } from './stage/types';
+import type { GraphPayload, NavPayload, ShowPayload, UIFrame, VoiceState } from './stage/types';
 import { resolveTarget } from '@/lib/stage-targets';
+import { useVoice, type VoiceHere } from '@/lib/voice/VoiceContext';
+import { VOICE_COLORS as COLORS } from '@/lib/voice/colors';
 
 const CAPTURE_RATE = 16000;
 const PLAYBACK_RATE = 24000;
 const SEND_SAMPLES = 512;
-const MAX_CARDS = 8;
-
-// orb/aura colors per state, in the OS palette (idle=muted, listening=teal, thinking/speaking=indigo)
-const COLORS: Record<VoiceState, [number, number, number]> = {
-  idle: [139, 139, 166],
-  connecting: [45, 226, 230],
-  listening: [45, 226, 230],
-  thinking: [139, 123, 255],
-  speaking: [139, 123, 255],
-  error: [251, 113, 133],
-};
 
 function wsUrl(): string {
   const env = process.env.NEXT_PUBLIC_VOICE_WS_URL;
@@ -37,12 +27,11 @@ function wsUrl(): string {
 }
 
 export function CurlyOrb() {
-  const [state, setStateReact] = useState<VoiceState>('idle');
-  const [cards, setCards] = useState<StageCard[]>([]);
-  const [caption, setCaption] = useState('');
+  const v = useVoice();
 
   // refs (hot-path / long-lived — never trigger renders)
   const stateRef = useRef<VoiceState>('idle');
+  const hereRef = useRef<VoiceHere | null>(null);
   const mountedRef = useRef(true);
   const runningRef = useRef(false);
   const wsRef = useRef<WebSocket | null>(null);
@@ -71,11 +60,24 @@ export function CurlyOrb() {
   const router = useRouter();
 
   function setVoiceState(s: VoiceState) {
-    stateRef.current = s;
-    if (mountedRef.current) setStateReact(s);
+    stateRef.current = s; // hot-path: RAF visualizer reads this, never React state
+    if (mountedRef.current) v._setState(s);
     if (typeof document !== 'undefined') {
       const [r, g, b] = COLORS[s];
       document.documentElement.style.setProperty('--accent', `rgb(${r},${g},${b})`);
+    }
+  }
+
+  // Send the user's current screen to the voice backend (context-awareness).
+  function sendContext(here: VoiceHere) {
+    hereRef.current = here;
+    const ws = wsRef.current;
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      try {
+        ws.send(JSON.stringify({ type: 'context', route: here.route, title: here.title }));
+      } catch {
+        /* socket closing */
+      }
     }
   }
 
@@ -121,15 +123,19 @@ export function CurlyOrb() {
   }
 
   // ---------- UI intents ----------
+  // Navigation drives the REAL OS (router.push); transient content (recall / web /
+  // think / a graph) lands in the integrated Curly panel via context.
   function handleUI(msg: UIFrame) {
     if (msg.intent === 'clear') {
-      setCards([]);
+      v._setPanel(null);
       return;
     }
     if (msg.intent === 'graph') {
       const g = msg.payload as GraphPayload;
-      const card: GraphCard = { kind: 'graph', id: msg.id, ts: msg.ts, source: msg.source, title: g?.title ?? 'Your mind', nodeId: g?.nodeId ?? null };
-      setCards((prev) => [card, ...prev.filter((c) => c.id !== card.id)].slice(0, MAX_CARDS));
+      v._setPanel({
+        kind: 'graph', id: msg.id, ts: msg.ts, source: msg.source,
+        title: g?.title ?? 'Your mind', body: '', sourcePath: null, nodeId: g?.nodeId ?? null,
+      });
       return;
     }
     if (msg.intent === 'navigate') {
@@ -137,14 +143,15 @@ export function CurlyOrb() {
       const r = resolveTarget(target);
       if (r.mode === 'route') router.push(r.href);
       else
-        setCards((prev) =>
-          [{ kind: 'note' as const, id: msg.id, ts: msg.ts, source: 'tool:show', title: 'Opening: ' + target, body: '', sourcePath: null }, ...prev].slice(0, MAX_CARDS),
-        );
+        v._setPanel({
+          kind: 'graph', id: msg.id, ts: msg.ts, source: msg.source,
+          title: 'Your mind', body: '', sourcePath: null, nodeId: r.nodeId,
+        });
       return;
     }
     if (msg.intent === 'show') {
       const p = msg.payload as ShowPayload;
-      const card: StageCard = {
+      v._setPanel({
         kind: p?.kind ?? 'note',
         id: msg.id,
         ts: msg.ts,
@@ -152,8 +159,7 @@ export function CurlyOrb() {
         title: p?.title ?? '',
         body: p?.body ?? '',
         sourcePath: p?.sourcePath ?? null,
-      };
-      setCards((prev) => [card, ...prev.filter((c) => c.id !== card.id)].slice(0, MAX_CARDS));
+      });
     }
   }
 
@@ -163,7 +169,7 @@ export function CurlyOrb() {
         setVoiceState('listening');
         break;
       case 'transcript':
-        if (mountedRef.current) setCaption(String(msg.text ?? ''));
+        if (mountedRef.current) v._setCaption(String(msg.text ?? ''));
         if (msg.role === 'user') setVoiceState('thinking');
         break;
       case 'interrupt':
@@ -218,7 +224,10 @@ export function CurlyOrb() {
       const ws = new WebSocket(wsUrl());
       ws.binaryType = 'arraybuffer';
       wsRef.current = ws;
-      ws.onopen = () => ws.send(JSON.stringify({ type: 'start' }));
+      ws.onopen = () => {
+        ws.send(JSON.stringify({ type: 'start' }));
+        if (hereRef.current) sendContext(hereRef.current);
+      };
       ws.onmessage = (ev) => {
         if (typeof ev.data === 'string') {
           let msg: any;
@@ -293,6 +302,9 @@ export function CurlyOrb() {
   // ---------- visualizer (runs whole lifetime; reads refs only) ----------
   useEffect(() => {
     mountedRef.current = true;
+    // Expose imperative controls so the dock/pages and RouteBeacon can drive the
+    // orb (start/stop) and push screen context — without a second WebSocket.
+    v.registerControls({ start, stop, sendContext });
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
@@ -382,12 +394,12 @@ export function CurlyOrb() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const state = v.state;
+  const caption = v.caption;
   const live = state !== 'idle' && state !== 'error';
 
   return (
     <>
-      <Stage cards={cards} />
-
       {caption && (
         <div className="pointer-events-none fixed inset-x-0 bottom-56 z-30 mx-auto max-w-[640px] px-6 text-center text-sm text-subtle">
           {caption}

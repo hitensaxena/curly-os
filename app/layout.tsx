@@ -4,6 +4,9 @@ import { headers } from "next/headers";
 import { isAllowed } from "@/lib/auth";
 import { CommandPalette } from "@/components/CommandPalette";
 import { CurlyOrb } from "@/components/CurlyOrb";
+import { CurlyPanel } from "@/components/voice/CurlyPanel";
+import { RouteBeacon } from "@/components/voice/RouteBeacon";
+import { VoiceProvider } from "@/lib/voice/VoiceContext";
 import "./globals.css";
 
 const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
@@ -36,9 +39,13 @@ export default async function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
-        {children}
-        {allowed && <CommandPalette />}
-        {allowed && <CurlyOrb />}
+        <VoiceProvider>
+          {children}
+          {allowed && <CommandPalette />}
+          {allowed && <CurlyOrb />}
+          {allowed && <CurlyPanel />}
+          {allowed && <RouteBeacon />}
+        </VoiceProvider>
       </body>
     </html>
   );
