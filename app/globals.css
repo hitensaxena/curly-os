@@ -50,6 +50,9 @@
   /* Orb clearance — bottom offset so content doesn't overlap the voice orb */
   --orb-clearance: 9.5rem;
 
+  /* Curly bar (omnibar spine) height — content reserves this at the bottom */
+  --spine-h: 4.5rem;
+
   /* Composite glow shorthand */
   --glow-soft: 0 0 40px -10px var(--accent-glow);
 

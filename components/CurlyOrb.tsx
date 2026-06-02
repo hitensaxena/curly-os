@@ -9,7 +9,7 @@
 // All browser APIs live inside handlers/effects (SSR-safe); every resource is torn
 // down on unmount; start() runs only from the user-gesture tap (autoplay policy).
 import { useEffect, useRef } from 'react';
-import { useRouter, usePathname } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import type { GraphPayload, NavPayload, ShowPayload, UIFrame, VoiceState } from './stage/types';
 import { resolveTarget } from '@/lib/stage-targets';
 import { useVoice, type VoiceHere } from '@/lib/voice/VoiceContext';
@@ -70,8 +70,6 @@ export function CurlyOrb() {
   );
 
   const router = useRouter();
-  const pathname = usePathname();
-  const hideOrb = !!pathname && pathname.startsWith('/chat');
 
   function setVoiceState(s: VoiceState) {
     stateRef.current = s; // hot-path: RAF visualizer reads this, never React state
@@ -569,49 +567,31 @@ export function CurlyOrb() {
   }, []);
 
   const state = v.state;
-  const caption = v.caption;
   const live = state !== 'idle' && state !== 'error';
 
+  // Curly orb — seated in the Curly bar's left slot. The bar (CurlyBar) is fixed
+  // at the bottom; the orb floats over its reserved slot at z-41. Mounted ONCE
+  // for the app's whole lifetime so the RAF visualizer + audio graph survive
+  // route changes (the canvas/button are never conditionally unmounted).
   return (
-    <>
-      {caption && !hideOrb && (
-        <div className="pointer-events-none fixed inset-x-0 bottom-56 z-30 mx-auto max-w-[640px] px-6 text-center text-sm text-subtle">
-          {caption}
-        </div>
-      )}
-
-      {/* orb + local audio-reactive canvas, bottom-center, persistent across routes.
-          On /chat the wrapper is made visually gone + non-interactive, but the canvas
-          and button STAY MOUNTED so the visualizer RAF (started once on mount) keeps
-          running — leaving /chat restores the orb instantly. */}
-      <div
-        className={`pointer-events-none fixed bottom-4 left-1/2 z-40 h-[320px] w-[320px] -translate-x-1/2 motion-safe:transition-opacity motion-safe:duration-300 ${
-          hideOrb ? 'opacity-0' : 'opacity-100'
-        }`}
-      >
-        <canvas ref={canvasRef} className="absolute inset-0 h-full w-full" style={{ width: 320, height: 320 }} />
+    <div className="pointer-events-none fixed bottom-0 left-3 z-[41] flex w-14 items-center justify-center" style={{ height: 'var(--spine-h)' }}>
+      <div className="relative h-14 w-14">
+        <canvas ref={canvasRef} className="absolute inset-0 h-full w-full" />
         <button
           ref={orbRef}
           type="button"
-          aria-hidden={hideOrb || undefined}
-          tabIndex={hideOrb ? -1 : undefined}
           aria-label={live ? 'Stop talking to Curly' : 'Talk to Curly'}
           onClick={() => (runningRef.current ? void stop() : void start())}
-          className={`absolute left-1/2 top-1/2 grid h-[120px] w-[120px] place-items-center rounded-full ${
-            hideOrb ? 'pointer-events-none' : 'pointer-events-auto'
-          }`}
+          className="pointer-events-auto absolute left-1/2 top-1/2 h-11 w-11 rounded-full"
           style={{ transform: 'translate(-50%,-50%)', background: 'radial-gradient(circle at 50% 36%, var(--surface-3), var(--surface) 72%)', boxShadow: '0 0 0 1px var(--border)' }}
         >
           <span
             ref={sheenRef}
             className="pointer-events-none absolute rounded-full"
-            style={{ inset: '16%', background: 'radial-gradient(circle at 50% 42%, rgb(var(--voice-rgb)), transparent 70%)', filter: 'blur(10px)', opacity: 0.3 }}
+            style={{ inset: '14%', background: 'radial-gradient(circle at 50% 42%, rgb(var(--voice-rgb)), transparent 70%)', filter: 'blur(8px)', opacity: 0.3 }}
           />
-          <span className="relative z-10 text-[10px] uppercase tracking-[0.18em]" style={{ color: live ? 'rgb(var(--voice-rgb))' : 'var(--muted)' }}>
-            {state === 'idle' ? 'talk' : state}
-          </span>
         </button>
       </div>
-    </>
+    </div>
   );
 }

@@ -1,14 +1,11 @@
-import { AppDock } from "@/components/shell/AppDock";
-
-// Shared chrome wrapper: left dock + main. Used by both the (shell) route group
-// and the standalone /chat and /surface routes that live outside it.
+// Shell content frame. Navigation + Curly now live in the bottom Curly bar
+// (the Omnibar spine, mounted globally in the root layout), so the frame is just
+// the content region — full-bleed — reserving the spine's height at the bottom.
 //
-// Non-full-height routes scroll the window and reserve --orb-clearance at the
-// bottom so the floating orb never covers content. Full-height routes (chat,
-// surface) pin to the dynamic viewport height (h-dvh) as a *definite*-height
-// flex column, so their child manages its own internal scroll (chat's message
-// list) or centers in the viewport (the surface stage) instead of growing the
-// page and pushing the sticky input/stage past the fold.
+// Non-full-height routes scroll the window with bottom padding so the last
+// content clears the fixed spine. Full-height routes (chat, surface) get a
+// definite height of (100dvh - spine) so their own internal scroll / centering
+// sits cleanly ABOVE the spine instead of being covered by it.
 export function ShellFrame({
   children,
   fullHeight = false,
@@ -16,23 +13,19 @@ export function ShellFrame({
   children: React.ReactNode;
   fullHeight?: boolean;
 }) {
-  return (
-    <div
-      className={
-        fullHeight ? "flex h-dvh w-full overflow-hidden" : "flex min-h-screen w-full"
-      }
-    >
-      <AppDock />
+  if (fullHeight) {
+    return (
       <main
-        className={
-          fullHeight
-            ? "flex min-w-0 flex-1 flex-col overflow-hidden"
-            : "min-w-0 flex-1"
-        }
-        style={fullHeight ? undefined : { paddingBottom: "var(--orb-clearance)" }}
+        className="flex w-full flex-col overflow-hidden"
+        style={{ height: "calc(100dvh - var(--spine-h))" }}
       >
         {children}
       </main>
-    </div>
+    );
+  }
+  return (
+    <main className="min-h-screen w-full" style={{ paddingBottom: "var(--spine-h)" }}>
+      {children}
+    </main>
   );
 }
