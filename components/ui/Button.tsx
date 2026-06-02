@@ -9,6 +9,7 @@ type Props = ButtonHTMLAttributes<HTMLButtonElement> & {
   size?: ButtonSize;
   leadingIcon?: ReactNode;
   trailingIcon?: ReactNode;
+  loading?: boolean;
 };
 
 const BASE =
@@ -16,7 +17,8 @@ const BASE =
   "transition-colors focus-visible:outline-none focus-visible:ring-2 " +
   "focus-visible:ring-accent focus-visible:ring-offset-1 " +
   "focus-visible:ring-offset-background " +
-  "disabled:cursor-not-allowed disabled:opacity-40";
+  "disabled:cursor-not-allowed disabled:opacity-40 " +
+  "motion-safe:transition-[transform,opacity,background-color,box-shadow] active:scale-[0.97]";
 
 const SIZES: Record<ButtonSize, string> = {
   // Touch-target safe: ~36px tall sm, ~40px tall md.
@@ -26,7 +28,9 @@ const SIZES: Record<ButtonSize, string> = {
 
 const VARIANTS: Record<ButtonVariant, string> = {
   primary:
-    "bg-accent text-accent-fg hover:opacity-90 active:opacity-100",
+    "bg-accent text-accent-fg hover:opacity-90 active:opacity-100 " +
+    "shadow-[0_0_0_1px_var(--accent-soft),0_0_20px_-6px_var(--accent-glow)] " +
+    "hover:shadow-[0_0_24px_-4px_var(--accent-glow)]",
   secondary:
     "border border-border bg-surface text-foreground " +
     "hover:bg-surface-2 active:bg-surface-3",
@@ -55,18 +59,31 @@ export const Button = forwardRef<HTMLButtonElement, Props>(function Button(
     className,
     children,
     type = "button",
+    loading = false,
+    disabled,
     ...rest
   },
   ref
 ) {
+  const isDisabled = disabled || loading;
   return (
     <button
       ref={ref}
       type={type}
       className={buttonClasses(variant, size, className)}
+      disabled={isDisabled}
+      aria-busy={loading || undefined}
       {...rest}
     >
-      {leadingIcon}
+      {loading ? (
+        <span
+          className="inline-block h-3.5 w-3.5 rounded-full border-2 border-current border-t-transparent"
+          style={{ animation: "spin 0.7s linear infinite" }}
+          aria-hidden="true"
+        />
+      ) : (
+        leadingIcon
+      )}
       {children ? <span>{children}</span> : null}
       {trailingIcon}
     </button>

@@ -4,6 +4,7 @@ import { noteHref } from "@/lib/vault-paths";
 import { Card } from "@/components/ui/Card";
 import { Markdown } from "@/components/Markdown";
 import { CareCheckin } from "@/components/care/CareCheckin";
+import { PageHeading } from "@/components/ui/PageHeading";
 
 export const dynamic = "force-dynamic";
 
@@ -17,8 +18,11 @@ export default async function CarePage() {
 
   return (
     <div className="mx-auto w-full max-w-3xl px-5 py-8 sm:px-8">
-      <h1 className="mb-1 text-2xl font-semibold text-foreground text-glow">Self-care</h1>
-      <p className="mb-6 text-sm text-muted">A quiet check on how you&apos;re doing — no pressure, just noticing.</p>
+      <PageHeading
+        title="Self-care"
+        subtitle="A quiet check on how you're doing — no pressure, just noticing."
+        tone="warm"
+      />
 
       {/* Check-in */}
       <section className="mb-6">

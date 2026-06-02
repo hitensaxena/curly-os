@@ -5,6 +5,7 @@ import { relTime, prettyDir } from "@/lib/format";
 import { Card } from "@/components/ui/Card";
 import { QuickCapture } from "@/components/dashboard/QuickCapture";
 import { Markdown } from "@/components/Markdown";
+import { PageHeading } from "@/components/ui/PageHeading";
 
 export const dynamic = "force-dynamic";
 
@@ -23,8 +24,11 @@ export default async function JournalPage() {
 
   return (
     <div className="mx-auto w-full max-w-4xl px-5 py-8 sm:px-8">
-      <h1 className="mb-1 text-2xl font-semibold text-foreground text-glow">Journal</h1>
-      <p className="mb-6 text-sm text-muted">Today, and the trail behind you.</p>
+      <PageHeading
+        title="Journal"
+        subtitle="Today, and the trail behind you."
+        tone="warm"
+      />
 
       {/* Today */}
       <section className="mb-6">
@@ -77,7 +81,7 @@ export default async function JournalPage() {
                 .filter((f) => f.name !== "_index.md")
                 .map((f) => (
                   <Card key={f.rel} as={Link} href={noteHref(f.rel)} interactive>
-                    <span className="truncate font-medium text-foreground">{f.title}</span>
+                    <div className="truncate font-medium text-foreground">{f.title}</div>
                   </Card>
                 ))}
             </div>

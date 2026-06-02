@@ -1,18 +1,12 @@
-import { AppDock } from "@/components/shell/AppDock";
+import { ShellFrame } from "@/components/shell/ShellFrame";
 
-// Persistent OS chrome: a left dock + scrollable main. The global CurlyOrb and
-// CommandPalette live in the root layout, so they overlay every shell route.
-// /surface, /chat and /forbidden sit OUTSIDE this group (their own full-bleed
-// layouts). pb-28 keeps content clear of the bottom-center orb button.
+// Persistent OS chrome for the (shell) route group. The global CurlyOrb and
+// CommandPalette live in the root layout so they overlay every shell route.
+// ShellFrame handles the left dock + main with orb clearance.
 export default function ShellLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  return (
-    <div className="flex min-h-screen w-full">
-      <AppDock />
-      <main className="min-w-0 flex-1 pb-28">{children}</main>
-    </div>
-  );
+  return <ShellFrame>{children}</ShellFrame>;
 }

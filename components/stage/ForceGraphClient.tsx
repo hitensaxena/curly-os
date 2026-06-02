@@ -7,11 +7,16 @@ import { useEffect, useRef, useState } from 'react';
 import ForceGraph2D from 'react-force-graph-2d';
 import type { StageGraph } from './types';
 
+const FALLBACK_NODE_COLOR = '#2DE2E6';
+const FALLBACK_LINK_COLOR = '#32324C';
+
 export default function ForceGraphClient({ graph, onNodeClick }: { graph: StageGraph; onNodeClick?: (id: string) => void }) {
   const wrapRef = useRef<HTMLDivElement>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const fgRef = useRef<any>(null);
   const [dim, setDim] = useState({ w: 600, h: 320 });
+  const [nodeColor, setNodeColor] = useState(FALLBACK_NODE_COLOR);
+  const [linkColor, setLinkColor] = useState(FALLBACK_LINK_COLOR);
 
   useEffect(() => {
     const el = wrapRef.current;
@@ -22,6 +27,15 @@ export default function ForceGraphClient({ graph, onNodeClick }: { graph: StageG
     return () => ro.disconnect();
   }, []);
 
+  // Resolve CSS tokens once on mount (canvas can't use CSS variables directly).
+  useEffect(() => {
+    const style = getComputedStyle(document.documentElement);
+    const resolvedNode = style.getPropertyValue('--accent-2').trim();
+    const resolvedLink = style.getPropertyValue('--border-soft').trim();
+    if (resolvedNode) setNodeColor(resolvedNode);
+    if (resolvedLink) setLinkColor(resolvedLink);
+  }, []);
+
   return (
     <div ref={wrapRef} className="h-[42dvh] w-full overflow-hidden rounded-xl">
       <ForceGraph2D
@@ -30,13 +44,13 @@ export default function ForceGraphClient({ graph, onNodeClick }: { graph: StageG
         height={dim.h}
         graphData={graph}
         backgroundColor="rgba(0,0,0,0)"
-        nodeColor={() => '#2DE2E6'}
+        nodeColor={() => nodeColor}
         nodeRelSize={3}
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         nodeVal={(n: any) => 1 + Math.sqrt(Number(n.val) || 1)}
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         nodeLabel={(n: any) => String(n.label ?? n.id)}
-        linkColor={() => '#32324C'}
+        linkColor={() => linkColor}
         linkWidth={1}
         cooldownTicks={120}
         onEngineStop={() => fgRef.current?.zoomToFit?.(400, 30)}

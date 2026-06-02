@@ -4,6 +4,7 @@ import { KNOWN_DIRS, HIDDEN_DIRS } from "@/lib/vault-fs";
 import { noteHref } from "@/lib/vault-paths";
 import { prettyDir } from "@/lib/format";
 import { Card } from "@/components/ui/Card";
+import { PageHeading } from "@/components/ui/PageHeading";
 
 export const dynamic = "force-dynamic";
 
@@ -17,8 +18,10 @@ export default function NotesIndex() {
 
   return (
     <div className="mx-auto w-full max-w-4xl px-5 py-8 sm:px-8">
-      <h1 className="mb-1 text-2xl font-semibold text-foreground text-glow">Notes</h1>
-      <p className="mb-6 text-sm text-muted">Browse every folder in your mind.</p>
+      <PageHeading
+        title="Notes"
+        subtitle="Browse every folder in your mind."
+      />
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         {dirs.map((d) => (

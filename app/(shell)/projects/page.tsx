@@ -2,6 +2,7 @@ import Link from "next/link";
 import { listProjects, registryExists } from "@/lib/projects";
 import { Card } from "@/components/ui/Card";
 import { NewProjectButton } from "@/components/projects/NewProjectButton";
+import { PageHeading } from "@/components/ui/PageHeading";
 
 export const dynamic = "force-dynamic";
 
@@ -16,13 +17,11 @@ export default async function ProjectsPage() {
 
   return (
     <div className="mx-auto w-full max-w-4xl px-5 py-8 sm:px-8">
-      <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold text-foreground text-glow">Projects</h1>
-          <p className="mt-1 text-sm text-muted">Work on what matters, with your brain behind you.</p>
-        </div>
-        <NewProjectButton hasRegistry={hasRegistry} />
-      </div>
+      <PageHeading
+        title="Projects"
+        subtitle="Work on what matters, with your brain behind you."
+        actions={<NewProjectButton hasRegistry={hasRegistry} />}
+      />
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         {projects.map((p) => (

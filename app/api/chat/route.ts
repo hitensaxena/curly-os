@@ -92,12 +92,40 @@ export async function POST(request: Request) {
   let assistantText = "";
   let sessionId: string | null = null;
 
+  // Shared across start()/cancel(): once the client disconnects or the stream
+  // ends, no handler may touch the controller again. Enqueuing/closing a closed
+  // controller throws ERR_INVALID_STATE, and because that happens inside a
+  // ChildProcess event handler it becomes an uncaughtException that kills the
+  // whole server. The guards below make every controller op a safe no-op.
+  let closed = false;
+
   const stream = new ReadableStream({
     start(controller) {
+      const safeClose = () => {
+        if (closed) return;
+        closed = true;
+        try {
+          controller.close();
+        } catch {
+          /* already closed/cancelled */
+        }
+      };
       const sendEvent = (event: string, data: unknown) => {
-        controller.enqueue(
-          encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`)
-        );
+        if (closed) return;
+        try {
+          controller.enqueue(
+            encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`)
+          );
+        } catch {
+          // Consumer went away mid-stream: stop streaming and tear down the
+          // child so we don't keep throwing on a dead controller.
+          closed = true;
+          try {
+            proc.kill("SIGTERM");
+          } catch {
+            /* already exited */
+          }
+        }
       };
 
       // Fire brain retrieval in parallel — usually resolves long before claude
@@ -141,7 +169,7 @@ export async function POST(request: Request) {
       proc.on("error", (err) => {
         sendEvent("error", { message: err.message });
         releaseLock();
-        controller.close();
+        safeClose();
       });
 
       proc.on("exit", (code) => {
@@ -154,11 +182,18 @@ export async function POST(request: Request) {
         }
         sendEvent("end", { exitCode: code, chatId: sessionId });
         releaseLock();
-        controller.close();
+        safeClose();
       });
     },
     cancel() {
-      proc.kill("SIGTERM");
+      // Client disconnected — mark closed so in-flight child handlers stop
+      // enqueuing, then tear down the child process.
+      closed = true;
+      try {
+        proc.kill("SIGTERM");
+      } catch {
+        /* already exited */
+      }
       if (resumeId) inFlightSessions.delete(resumeId);
     },
   });

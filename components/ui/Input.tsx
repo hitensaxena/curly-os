@@ -5,6 +5,7 @@ const BASE_INPUT =
   "w-full rounded-md border border-border bg-surface px-3 text-sm " +
   "text-foreground placeholder:text-muted transition-colors " +
   "focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent " +
+  "focus:shadow-[0_0_0_1px_var(--accent),0_0_16px_-8px_var(--accent-glow)] " +
   "disabled:cursor-not-allowed disabled:opacity-50";
 
 export const Input = forwardRef<

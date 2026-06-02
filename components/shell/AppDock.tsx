@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import type { SVGProps } from "react";
 import { Logo } from "@/components/Logo";
 import { useVoice } from "@/lib/voice/VoiceContext";
-import { voiceRgb, VOICE_LABEL } from "@/lib/voice/colors";
+import { VOICE_LABEL } from "@/lib/voice/colors";
 
 // Persistent left rail for the OS shell. Icon-only on narrow screens, icon +
 // label from lg. Active state via usePathname; the ⌘K button reuses the
@@ -57,13 +57,18 @@ export function AppDock() {
             aria-current={active ? "page" : undefined}
             title={label}
             className={[
-              "flex items-center gap-3 rounded-md px-2.5 py-2 text-sm transition-colors",
+              "relative flex items-center gap-3 rounded-md px-2.5 py-2 text-sm transition-colors",
               active
-                ? "bg-accent-soft text-foreground glow"
-                : "text-muted hover:bg-surface-2 hover:text-foreground",
+                ? "bg-accent-soft text-foreground glow border-l-2 border-accent"
+                : "text-muted hover:bg-surface-2 hover:text-accent",
             ].join(" ")}
           >
-            <Icon className="h-5 w-5 shrink-0" />
+            <Icon
+              className={[
+                "h-5 w-5 shrink-0 transition-colors",
+                active ? "text-accent" : "",
+              ].join(" ")}
+            />
             <span className="hidden lg:inline">{label}</span>
           </Link>
         );
@@ -75,12 +80,17 @@ export function AppDock() {
           type="button"
           onClick={toggleVoice}
           title={live ? `Curly: ${VOICE_LABEL[v.state]} — tap to stop` : "Talk to Curly"}
-          className="flex items-center gap-3 rounded-md px-2.5 py-2 text-sm text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
+          className="flex items-center gap-3 rounded-md px-2.5 py-2 text-sm text-muted transition-colors hover:bg-surface-2 hover:text-accent"
         >
           <span
             aria-hidden
             className={`h-2.5 w-2.5 shrink-0 rounded-full ${live ? "animate-pulse" : ""}`}
-            style={{ background: voiceRgb(v.state), boxShadow: live ? `0 0 8px ${voiceRgb(v.state)}` : undefined }}
+            style={{
+              background: "rgb(var(--voice-rgb))",
+              boxShadow: live
+                ? `0 0 8px rgb(var(--voice-rgb)), 0 0 0 2px rgba(var(--voice-rgb), 0.20)`
+                : undefined,
+            }}
           />
           <span className="hidden min-w-0 flex-1 truncate lg:inline">
             {v.caption && live ? v.caption : VOICE_LABEL[v.state]}
@@ -91,7 +101,7 @@ export function AppDock() {
           type="button"
           onClick={() => window.dispatchEvent(new Event("curly-palette-open"))}
           title="Command palette"
-          className="flex items-center gap-3 rounded-md px-2.5 py-2 text-sm text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
+          className="flex items-center gap-3 rounded-md px-2.5 py-2 text-sm text-muted transition-colors hover:bg-surface-2 hover:text-accent"
         >
           <CommandIcon className="h-5 w-5 shrink-0" />
           <span className="hidden lg:inline">⌘K</span>

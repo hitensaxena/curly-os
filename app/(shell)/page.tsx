@@ -8,6 +8,7 @@ import { listProjects } from "@/lib/projects";
 import { noteHref } from "@/lib/vault-paths";
 import { Card } from "@/components/ui/Card";
 import { QuickCapture } from "@/components/dashboard/QuickCapture";
+import { PageHeading } from "@/components/ui/PageHeading";
 
 export const dynamic = "force-dynamic";
 
@@ -67,25 +68,23 @@ export default async function Home() {
   return (
     <div className="mx-auto w-full max-w-5xl px-5 py-8 sm:px-8">
       {/* Header */}
-      <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-semibold text-foreground text-glow">
-            {greeting()}, {name}.
-          </h1>
-          <p className="mt-1 text-sm text-muted">{dateLabel}</p>
-        </div>
-        <div className="flex gap-2 text-xs text-muted">
-          <span className="rounded-md border border-border bg-surface px-3 py-1.5">
-            {vault.files.toLocaleString()} notes · {vault.links.toLocaleString()} links
-          </span>
-          <span className="rounded-md border border-border bg-surface px-3 py-1.5">
-            brain{" "}
-            {stats
-              ? `${stats.nodes.toLocaleString()} · ${stats.chunks.toLocaleString()} chunks`
-              : "offline"}
-          </span>
-        </div>
-      </div>
+      <PageHeading
+        title={`${greeting()}, ${name}.`}
+        subtitle={dateLabel}
+        actions={
+          <div className="flex gap-2 text-xs text-muted">
+            <span className="rounded-md border border-border bg-surface px-3 py-1.5">
+              {vault.files.toLocaleString()} notes · {vault.links.toLocaleString()} links
+            </span>
+            <span className="rounded-md border border-border bg-surface px-3 py-1.5">
+              brain{" "}
+              {stats
+                ? `${stats.nodes.toLocaleString()} · ${stats.chunks.toLocaleString()} chunks`
+                : "offline"}
+            </span>
+          </div>
+        }
+      />
 
       {/* Quick links */}
       <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">

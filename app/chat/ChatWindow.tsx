@@ -309,7 +309,7 @@ export function ChatWindow({
           ))}
         </div>
       </div>
-      <div className="border-t border-border bg-surface px-3 py-3 sm:px-4">
+      <div className="border-t border-border/50 bg-surface/70 px-3 py-3 backdrop-blur-xl sm:px-4">
         <div className="mx-auto max-w-3xl">
           {voice.showPrivacyNotice && (
             <div className="mb-2">

@@ -33,6 +33,26 @@
   --accent-2-soft: rgba(45, 226, 230, 0.12);
   --accent-2-glow: rgba(45, 226, 230, 0.45);
 
+  /* Soft pink accent — used sparingly (<5% of palette, never on chrome) */
+  --accent-3: #FF8FB1;
+  --accent-3-soft: rgba(255, 143, 177, 0.10);
+  --accent-3-glow: rgba(255, 143, 177, 0.45);
+
+  /* Warm orange accent — used sparingly (<5% of palette, never on chrome) */
+  --accent-warm: #FF9D5C;
+  --accent-warm-soft: rgba(255, 157, 92, 0.10);
+
+  /* Voice-reactive RGB triplet — orb/dock updates this per voice state.
+     Use as rgb(var(--voice-rgb)) or rgba(var(--voice-rgb), .3).
+     NEVER overwrite --accent at runtime; use this instead. */
+  --voice-rgb: 139, 139, 166;
+
+  /* Orb clearance — bottom offset so content doesn't overlap the voice orb */
+  --orb-clearance: 9.5rem;
+
+  /* Composite glow shorthand */
+  --glow-soft: 0 0 40px -10px var(--accent-glow);
+
   /* Semantic — brightened for legibility on near-black */
   --success: #34D399;
   --danger: #FB7185;
@@ -68,6 +88,11 @@
   --color-accent-2: var(--accent-2);
   --color-accent-2-soft: var(--accent-2-soft);
   --color-accent-2-glow: var(--accent-2-glow);
+  --color-accent-3: var(--accent-3);
+  --color-accent-3-soft: var(--accent-3-soft);
+  --color-accent-3-glow: var(--accent-3-glow);
+  --color-accent-warm: var(--accent-warm);
+  --color-accent-warm-soft: var(--accent-warm-soft);
   --color-success: var(--success);
   --color-danger: var(--danger);
   --color-warning: var(--warning);
@@ -120,8 +145,14 @@ body::before {
 .glow-2 {
   box-shadow: 0 0 0 1px var(--accent-2-soft), 0 0 28px -6px var(--accent-2-glow);
 }
+.glow-soft {
+  box-shadow: var(--glow-soft);
+}
 .text-glow {
   text-shadow: 0 0 24px var(--accent-glow);
+}
+.text-glow-2 {
+  text-shadow: 0 0 24px var(--accent-2-glow);
 }
 
 /* Thin, theme-aware scrollbar */
@@ -164,3 +195,38 @@ body::before {
 }
 
 @keyframes cardin { from { opacity: 0; transform: translateY(12px) scale(.99); } to { opacity: 1; transform: none; } }
+
+/* Button loading spinner */
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Global grain — whisper-subtle film texture, static and reduced-motion safe */
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.035;
+  mix-blend-mode: soft-light;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23grain)'/%3E%3C/svg%3E");
+  background-size: 180px 180px;
+}
+
+/* Second aurora layer — crosses the primary ::before at different positions,
+   drifting opposite direction (~52 s) for a slow cross-fade depth effect. */
+.aurora-2 {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(55rem 45rem at 90% 110%, var(--accent-2-soft), transparent 55%),
+    radial-gradient(45rem 55rem at 5% 100%, var(--accent-soft), transparent 50%),
+    radial-gradient(60rem 35rem at 55% -15%, rgba(45, 226, 230, 0.05), transparent 60%);
+  animation: auroraDrift2 52s var(--ease-out) infinite alternate;
+}
+
+@keyframes auroraDrift2 {
+  from { transform: translate3d(2%, 1%, 0) scale(1.06); opacity: 0.8; }
+  to   { transform: translate3d(-1%, -2%, 0) scale(1); opacity: 1; }
+}

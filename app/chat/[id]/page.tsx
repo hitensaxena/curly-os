@@ -15,16 +15,16 @@ export default async function ChatByIdPage({ params }: Ctx) {
     : [];
 
   return (
-    <main className="flex flex-1 flex-col">
-      <header className="flex items-center justify-between border-b border-border px-4 py-3">
-        <div>
-          <a href="/" className="text-sm font-semibold text-foreground hover:text-accent">
-            Curly OS
-          </a>
-          <p className="text-xs text-muted">
-            Chat with Curly · {user.displayName ?? user.username}
-            <span className="ml-2 font-mono opacity-60">{id.slice(0, 8)}</span>
-          </p>
+    <div className="flex h-full flex-1 flex-col">
+      <header className="shrink-0 border-b border-border/40 px-4 py-3 sm:px-6">
+        <div className="mx-auto flex max-w-3xl items-center justify-between gap-3">
+          <div className="min-w-0">
+            <h1 className="text-sm font-semibold text-foreground">Chat with Curly</h1>
+            <p className="truncate text-xs text-muted">
+              {user.displayName ?? user.username}
+              <span className="ml-2 font-mono opacity-50">{id.slice(0, 8)}</span>
+            </p>
+          </div>
         </div>
       </header>
       <ChatWindow
@@ -32,6 +32,6 @@ export default async function ChatByIdPage({ params }: Ctx) {
         initialMessages={initialMessages}
         chatExists={!!existing}
       />
-    </main>
+    </div>
   );
 }

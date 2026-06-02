@@ -8,6 +8,7 @@ import { noteHref } from "@/lib/vault-paths";
 import { Input } from "@/components/ui/Input";
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { PageHeading } from "@/components/ui/PageHeading";
 import type { SearchResponse, SearchNote } from "@/app/api/search/route";
 
 const SOURCE_LABEL: Record<SearchNote["source"], string> = {
@@ -34,6 +35,10 @@ export function SearchView() {
 
   return (
     <div className="mx-auto w-full max-w-3xl px-5 py-8 sm:px-8">
+      <PageHeading
+        title="Search"
+        subtitle="Find anything across notes, journals, and past conversations."
+      />
       <Input
         autoFocus
         value={q}

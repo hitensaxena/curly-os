@@ -9,6 +9,7 @@ import { AnimatedLogo } from "@/components/AnimatedLogo";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { PageHeading } from "@/components/ui/PageHeading";
 import { relTime } from "@/lib/format";
 
 // The agent command center. A command (typed or spoken) becomes a fresh /api/chat
@@ -189,11 +190,10 @@ export function AgentConsole({
 
   return (
     <div className="mx-auto w-full max-w-3xl px-5 py-8 sm:px-8">
-      <h1 className="mb-1 text-2xl font-semibold text-foreground text-glow">Agent</h1>
-      <p className="mb-5 text-sm text-muted">
-        Give Curly a task — it can read &amp; write your vault, run commands, and search the web.
-        Watch it work below.
-      </p>
+      <PageHeading
+        title="Agent"
+        subtitle="Give Curly a task — it can read & write your vault, run commands, and search the web. Watch it work below."
+      />
 
       {/* Command bar */}
       <div className="rounded-lg border border-border bg-surface p-3">

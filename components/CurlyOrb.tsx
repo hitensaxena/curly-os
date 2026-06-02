@@ -9,7 +9,7 @@
 // All browser APIs live inside handlers/effects (SSR-safe); every resource is torn
 // down on unmount; start() runs only from the user-gesture tap (autoplay policy).
 import { useEffect, useRef } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import type { GraphPayload, NavPayload, ShowPayload, UIFrame, VoiceState } from './stage/types';
 import { resolveTarget } from '@/lib/stage-targets';
 import { useVoice, type VoiceHere } from '@/lib/voice/VoiceContext';
@@ -53,18 +53,28 @@ export function CurlyOrb() {
   const rafRef = useRef<number | null>(null);
   const smoothRef = useRef(0);
   const freqRef = useRef(new Uint8Array(128));
+  // Spherical "stars suspended in glass": theta/phi place each point on a sphere,
+  // r is its depth from center (0..1), phi advances per-frame by a state-driven swirl.
   const particlesRef = useRef(
-    Array.from({ length: 60 }, () => ({ x: Math.random(), y: Math.random(), z: 0.2 + Math.random() * 0.8, a: Math.random() * Math.PI * 2 })),
+    Array.from({ length: 70 }, () => ({
+      theta: Math.random() * Math.PI * 2,
+      phi: Math.acos(2 * Math.random() - 1),
+      r: 0.2 + Math.random() * 0.8,
+      speed: 0.0006 + Math.random() * 0.0014,
+    })),
   );
 
   const router = useRouter();
+  const pathname = usePathname();
+  const hideOrb = !!pathname && pathname.startsWith('/chat');
 
   function setVoiceState(s: VoiceState) {
     stateRef.current = s; // hot-path: RAF visualizer reads this, never React state
     if (mountedRef.current) v._setState(s);
     if (typeof document !== 'undefined') {
       const [r, g, b] = COLORS[s];
-      document.documentElement.style.setProperty('--accent', `rgb(${r},${g},${b})`);
+      // Drive only the voice-reactive token — NEVER the global brand --accent.
+      document.documentElement.style.setProperty('--voice-rgb', `${r},${g},${b}`);
     }
   }
 
@@ -311,6 +321,28 @@ export function CurlyOrb() {
     if (!ctx) return;
     const SIZE = 320;
 
+    // Read motion preference once for the effect's lifetime (mirrors AnimatedLogo).
+    const reduceMotion =
+      typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    // Pre-bake a 64x64 gray-noise tile ONCE; reused every frame for faint film grain.
+    let grainTile: HTMLCanvasElement | null = null;
+    if (typeof document !== 'undefined') {
+      const g = document.createElement('canvas');
+      g.width = g.height = 64;
+      const gctx = g.getContext('2d');
+      if (gctx) {
+        const img = gctx.createImageData(64, 64);
+        for (let i = 0; i < img.data.length; i += 4) {
+          const n = (Math.random() * 255) | 0;
+          img.data[i] = img.data[i + 1] = img.data[i + 2] = n;
+          img.data[i + 3] = 255;
+        }
+        gctx.putImageData(img, 0, 0);
+        grainTile = g;
+      }
+    }
+
     function resize() {
       const dpr = Math.min(window.devicePixelRatio || 1, 2);
       canvas!.width = SIZE * dpr;
@@ -320,22 +352,14 @@ export function CurlyOrb() {
     resize();
     window.addEventListener('resize', resize);
 
+    const TWO_PI = Math.PI * 2;
+
     const draw = (t: number) => {
       const cx = SIZE / 2;
       const cy = SIZE / 2;
       ctx.clearRect(0, 0, SIZE, SIZE);
-      const [r, g, b] = COLORS[stateRef.current];
 
-      for (const p of particlesRef.current) {
-        p.a += 0.0007 * p.z;
-        const px = ((p.x + Math.cos(p.a) * 0.04) % 1) * SIZE;
-        const py = ((p.y + t * 0.000006 * p.z) % 1) * SIZE;
-        ctx.beginPath();
-        ctx.arc(px, py, p.z * 1.2, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(${r},${g},${b},${0.04 + p.z * 0.05})`;
-        ctx.fill();
-      }
-
+      // --- level plumbing (kept verbatim from the prior implementation) ---
       const st = stateRef.current;
       const an = st === 'speaking' ? playAnalyserRef.current : st === 'listening' || st === 'thinking' ? micAnalyserRef.current : null;
       let level = 0;
@@ -346,36 +370,154 @@ export function CurlyOrb() {
         for (let i = 0; i < 40; i++) sum += freq[i] ?? 0;
         level = sum / 40 / 255;
       }
-      const breathe = (Math.sin(t * 0.0016) + 1) * 0.5;
+      const breathe = reduceMotion ? 0.5 : (Math.sin(t * 0.0016) + 1) * 0.5;
       const target = st === 'idle' ? 0.05 * breathe : st === 'thinking' ? 0.12 + 0.1 * breathe : level;
       smoothRef.current += (target - smoothRef.current) * 0.18;
       const lvl = smoothRef.current;
+      // --- end level plumbing ---
 
+      const [r, g, b] = COLORS[stateRef.current];
       const baseR = 66;
-      const N = 80;
+      const auraR = baseR + 6;
+
       ctx.save();
       ctx.translate(cx, cy);
-      for (let i = 0; i < N; i++) {
-        const bin = an ? (freq[Math.floor((i / N) * 48)] ?? 0) / 255 : lvl;
-        const amp = 6 + bin * 44 + lvl * 22;
-        const ang = (i / N) * Math.PI * 2 + t * 0.0002;
-        const r0 = baseR + 4;
-        const r1 = r0 + amp;
-        ctx.beginPath();
-        ctx.moveTo(Math.cos(ang) * r0, Math.sin(ang) * r0);
-        ctx.lineTo(Math.cos(ang) * r1, Math.sin(ang) * r1);
-        ctx.strokeStyle = `rgba(${r},${g},${b},${0.05 + bin * 0.4})`;
-        ctx.lineWidth = 2;
-        ctx.stroke();
-      }
-      const glow = ctx.createRadialGradient(0, 0, baseR * 0.5, 0, 0, baseR + 60 + lvl * 50);
-      glow.addColorStop(0, `rgba(${r},${g},${b},${0.14 + lvl * 0.3})`);
-      glow.addColorStop(1, 'rgba(0,0,0,0)');
-      ctx.fillStyle = glow;
+
+      // 1) OUTER BLOOM HALO (additive)
+      ctx.globalCompositeOperation = 'lighter';
+      const haloOuter = baseR + 70 + lvl * 60;
+      const halo = ctx.createRadialGradient(0, 0, baseR * 0.6, 0, 0, haloOuter);
+      halo.addColorStop(0, `rgba(${r},${g},${b},${Math.min(0.42, 0.1 + lvl * 0.28)})`);
+      halo.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = halo;
       ctx.beginPath();
-      ctx.arc(0, 0, baseR + 60 + lvl * 50, 0, Math.PI * 2);
+      ctx.arc(0, 0, haloOuter, 0, TWO_PI);
       ctx.fill();
-      ctx.restore();
+
+      // 2) FREQUENCY AURA RING (additive) — one smooth closed path, soft wobble.
+      const RN = 96;
+      const ringRot = reduceMotion ? 0 : t * 0.00018;
+      const pts: Array<[number, number]> = [];
+      for (let i = 0; i < RN; i++) {
+        let perBin: number;
+        if (an) {
+          // rolling average of 3 neighbouring bins -> wobble, not spikes
+          const bi = Math.floor((i / RN) * 45);
+          const b0 = freq[bi] ?? 0;
+          const b1 = freq[bi + 1] ?? b0;
+          const b2 = freq[(bi + 2) % freq.length] ?? b0;
+          perBin = (b0 + b1 + b2) / 3 / 255;
+        } else {
+          perBin = lvl;
+        }
+        const radius = auraR + perBin * 40 + lvl * 22;
+        const ang = (i / RN) * TWO_PI + ringRot;
+        pts.push([Math.cos(ang) * radius, Math.sin(ang) * radius]);
+      }
+      // Smooth via midpoint quadratic curves through the points.
+      ctx.beginPath();
+      const mid0x = (pts[RN - 1][0] + pts[0][0]) / 2;
+      const mid0y = (pts[RN - 1][1] + pts[0][1]) / 2;
+      ctx.moveTo(mid0x, mid0y);
+      for (let i = 0; i < RN; i++) {
+        const cur = pts[i];
+        const nxt = pts[(i + 1) % RN];
+        const mx = (cur[0] + nxt[0]) / 2;
+        const my = (cur[1] + nxt[1]) / 2;
+        ctx.quadraticCurveTo(cur[0], cur[1], mx, my);
+      }
+      ctx.closePath();
+      const ringFill = ctx.createRadialGradient(0, 0, baseR, 0, 0, auraR + 50);
+      ringFill.addColorStop(0, `rgba(${r},${g},${b},${Math.min(0.18, 0.04 + lvl * 0.14)})`);
+      ringFill.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = ringFill;
+      ctx.fill();
+      ctx.strokeStyle = `rgba(${r},${g},${b},${Math.min(0.6, 0.1 + level * 0.5)})`;
+      ctx.lineWidth = 2.5;
+      ctx.stroke();
+
+      // 3) GLASS SPHERE BODY (normal compositing) — lit off-center top-left.
+      ctx.globalCompositeOperation = 'source-over';
+      const body = ctx.createRadialGradient(-18, -24, 2, 0, 0, baseR);
+      body.addColorStop(0, `rgba(${r},${g},${b},0.9)`);
+      body.addColorStop(1, `rgba(${r},${g},${b},0.1)`);
+      ctx.fillStyle = body;
+      ctx.beginPath();
+      ctx.arc(0, 0, baseR, 0, TWO_PI);
+      ctx.fill();
+      // subtle rim-light: faint white brightening near the edge.
+      const rim = ctx.createRadialGradient(0, 0, baseR * 0.82, 0, 0, baseR);
+      rim.addColorStop(0, 'rgba(255,255,255,0)');
+      rim.addColorStop(1, 'rgba(255,255,255,0.06)');
+      ctx.fillStyle = rim;
+      ctx.beginPath();
+      ctx.arc(0, 0, baseR, 0, TWO_PI);
+      ctx.fill();
+
+      // Clip to the sphere so internal particles stay inside the glass.
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(0, 0, baseR, 0, TWO_PI);
+      ctx.clip();
+
+      // 4) INTERNAL SWIRLING PARTICLES with z-depth (additive, back-to-front).
+      const swirl = st === 'idle' ? 1 : st === 'listening' ? 1.4 : st === 'thinking' ? 2.2 : st === 'speaking' ? 1.8 : 1;
+      const a = reduceMotion ? 0 : t * 0.0002;
+      const ca = Math.cos(a);
+      const sa = Math.sin(a);
+      const projected: Array<{ px: number; py: number; depth: number }> = [];
+      for (const p of particlesRef.current) {
+        if (!reduceMotion) p.phi += p.speed * swirl;
+        const sinPhi = Math.sin(p.phi);
+        const cosPhi = Math.cos(p.phi);
+        const cosTheta = Math.cos(p.theta);
+        const sinTheta = Math.sin(p.theta);
+        const x3 = p.r * sinPhi * cosTheta;
+        const y3 = p.r * cosPhi;
+        const z3 = p.r * sinPhi * sinTheta;
+        const px = (x3 * ca + z3 * sa) * baseR * 0.86;
+        const py = y3 * baseR * 0.86;
+        const depth = -x3 * sa + z3 * ca; // -1..1, +front
+        projected.push({ px, py, depth });
+      }
+      projected.sort((p1, p2) => p1.depth - p2.depth);
+      ctx.globalCompositeOperation = 'lighter';
+      for (const p of projected) {
+        const rad = 0.8 + (p.depth + 1) * 1.1;
+        const alpha = 0.05 + (p.depth + 1) * 0.12;
+        ctx.beginPath();
+        ctx.arc(p.px, p.py, rad, 0, TWO_PI);
+        ctx.fillStyle = `rgba(${r},${g},${b},${alpha})`;
+        ctx.fill();
+      }
+
+      // 5) SPECULAR HIGHLIGHT (normal) — the glassy read, top-left.
+      ctx.globalCompositeOperation = 'source-over';
+      const hx = -baseR * 0.35;
+      const hy = -baseR * 0.4;
+      const spec = ctx.createRadialGradient(hx, hy, 0, hx, hy, baseR * 0.4);
+      spec.addColorStop(0, 'rgba(255,255,255,0.5)');
+      spec.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.fillStyle = spec;
+      ctx.beginPath();
+      ctx.arc(hx, hy, baseR * 0.4, 0, TWO_PI);
+      ctx.fill();
+
+      ctx.restore(); // release sphere clip
+
+      // 6) FILM GRAIN (very faint) — pre-baked tile, tiled across the orb area.
+      if (grainTile) {
+        ctx.globalAlpha = 0.03;
+        for (let gx = -baseR; gx < baseR; gx += 64) {
+          for (let gy = -baseR; gy < baseR; gy += 64) {
+            ctx.drawImage(grainTile, gx, gy);
+          }
+        }
+        ctx.globalAlpha = 1;
+      }
+
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.restore(); // release translate
 
       if (orbRef.current) orbRef.current.style.transform = `translate(-50%, -50%) scale(${1 + lvl * 0.12})`;
       if (sheenRef.current) sheenRef.current.style.opacity = String(0.3 + lvl * 0.6);
@@ -400,29 +542,40 @@ export function CurlyOrb() {
 
   return (
     <>
-      {caption && (
+      {caption && !hideOrb && (
         <div className="pointer-events-none fixed inset-x-0 bottom-56 z-30 mx-auto max-w-[640px] px-6 text-center text-sm text-subtle">
           {caption}
         </div>
       )}
 
-      {/* orb + local audio-reactive canvas, bottom-center, persistent across routes */}
-      <div className="pointer-events-none fixed bottom-4 left-1/2 z-40 h-[320px] w-[320px] -translate-x-1/2">
+      {/* orb + local audio-reactive canvas, bottom-center, persistent across routes.
+          On /chat the wrapper is made visually gone + non-interactive, but the canvas
+          and button STAY MOUNTED so the visualizer RAF (started once on mount) keeps
+          running — leaving /chat restores the orb instantly. */}
+      <div
+        className={`pointer-events-none fixed bottom-4 left-1/2 z-40 h-[320px] w-[320px] -translate-x-1/2 motion-safe:transition-opacity motion-safe:duration-300 ${
+          hideOrb ? 'opacity-0' : 'opacity-100'
+        }`}
+      >
         <canvas ref={canvasRef} className="absolute inset-0 h-full w-full" style={{ width: 320, height: 320 }} />
         <button
           ref={orbRef}
           type="button"
+          aria-hidden={hideOrb || undefined}
+          tabIndex={hideOrb ? -1 : undefined}
           aria-label={live ? 'Stop talking to Curly' : 'Talk to Curly'}
           onClick={() => (runningRef.current ? void stop() : void start())}
-          className="pointer-events-auto absolute left-1/2 top-1/2 grid h-[120px] w-[120px] place-items-center rounded-full"
+          className={`absolute left-1/2 top-1/2 grid h-[120px] w-[120px] place-items-center rounded-full ${
+            hideOrb ? 'pointer-events-none' : 'pointer-events-auto'
+          }`}
           style={{ transform: 'translate(-50%,-50%)', background: 'radial-gradient(circle at 50% 36%, var(--surface-3), var(--surface) 72%)', boxShadow: '0 0 0 1px var(--border)' }}
         >
           <span
             ref={sheenRef}
             className="pointer-events-none absolute rounded-full"
-            style={{ inset: '16%', background: 'radial-gradient(circle at 50% 42%, var(--accent), transparent 70%)', filter: 'blur(10px)', opacity: 0.3 }}
+            style={{ inset: '16%', background: 'radial-gradient(circle at 50% 42%, rgb(var(--voice-rgb)), transparent 70%)', filter: 'blur(10px)', opacity: 0.3 }}
           />
-          <span className="relative z-10 text-[10px] uppercase tracking-[0.18em]" style={{ color: live ? 'var(--accent)' : 'var(--muted)' }}>
+          <span className="relative z-10 text-[10px] uppercase tracking-[0.18em]" style={{ color: live ? 'rgb(var(--voice-rgb))' : 'var(--muted)' }}>
             {state === 'idle' ? 'talk' : state}
           </span>
         </button>

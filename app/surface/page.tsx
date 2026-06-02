@@ -3,8 +3,8 @@
 // component — auth is already enforced by proxy.ts.
 export default function SurfacePage() {
   return (
-    <main className="flex flex-1 flex-col items-center justify-center" aria-label="Curly voice surface">
+    <div className="flex flex-1 flex-col items-center justify-center" aria-label="Curly voice surface">
       <p className="text-xs uppercase tracking-[0.25em] text-muted">tap the orb and talk</p>
-    </main>
+    </div>
   );
 }
