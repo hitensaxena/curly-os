@@ -6,6 +6,7 @@ import { CommandPalette } from "@/components/CommandPalette";
 import { CurlyOrb } from "@/components/CurlyOrb";
 import { CurlyPanel } from "@/components/voice/CurlyPanel";
 import { RouteBeacon } from "@/components/voice/RouteBeacon";
+import { ToastProvider } from "@/components/ui/ToastProvider";
 import { VoiceProvider } from "@/lib/voice/VoiceContext";
 import "./globals.css";
 
@@ -41,11 +42,13 @@ export default async function RootLayout({
       <body className="min-h-full flex flex-col">
         <div className="aurora-2" aria-hidden />
         <VoiceProvider>
-          {children}
-          {allowed && <CommandPalette />}
-          {allowed && <CurlyOrb />}
-          {allowed && <CurlyPanel />}
-          {allowed && <RouteBeacon />}
+          <ToastProvider>
+            {children}
+            {allowed && <CommandPalette />}
+            {allowed && <CurlyOrb />}
+            {allowed && <CurlyPanel />}
+            {allowed && <RouteBeacon />}
+          </ToastProvider>
         </VoiceProvider>
       </body>
     </html>

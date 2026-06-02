@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { ChatMessage, type Activity, type Phase, type RetrievalChunk } from "./ChatMessage";
+import { streamChat } from "@/lib/use-chat-stream";
 import { useVoiceInput } from "@/lib/use-voice-input";
 import { VoicePrivacyNotice } from "@/components/VoicePrivacyNotice";
 import { Button } from "@/components/ui/Button";
@@ -50,7 +51,7 @@ export function ChatWindow({
   const [isStreaming, setIsStreaming] = useState(false);
   const [think, setThink] = useState(false);
   const scrollerRef = useRef<HTMLDivElement>(null);
-  const abortRef = useRef<AbortController | null>(null);
+  const abortRef = useRef<{ cancel: () => void } | null>(null);
   const voice = useVoiceInput({ value: input, onChange: setInput });
 
   useEffect(() => {
@@ -93,116 +94,7 @@ export function ChatWindow({
     sessionIdRef.current = initialSessionId;
   }, [initialSessionId]);
 
-  const handleFrame = (frame: string, asstId: string) => {
-    const lines = frame.split("\n");
-    let eventName = "message";
-    let dataRaw = "";
-    for (const line of lines) {
-      if (line.startsWith("event: ")) eventName = line.slice(7).trim();
-      else if (line.startsWith("data: ")) dataRaw += line.slice(6);
-    }
-    if (!dataRaw) return;
-    let data: unknown;
-    try {
-      data = JSON.parse(dataRaw);
-    } catch {
-      return;
-    }
-    if (eventName === "delta" && data && typeof data === "object" && "text" in data) {
-      const text = String((data as { text: unknown }).text ?? "");
-      setMessages((m) =>
-        m.map((msg) =>
-          msg.id === asstId
-            ? { ...msg, content: msg.content + text, phase: "writing" }
-            : msg,
-        ),
-      );
-    } else if (eventName === "thinking" && data && typeof data === "object" && "text" in data) {
-      const text = String((data as { text: unknown }).text ?? "");
-      setMessages((m) =>
-        m.map((msg) =>
-          msg.id === asstId
-            ? { ...msg, thinking: (msg.thinking ?? "") + text, phase: "thinking" }
-            : msg,
-        ),
-      );
-    } else if (eventName === "phase" && data && typeof data === "object") {
-      const phase = (data as { phase?: unknown }).phase;
-      if (phase === "thinking" || phase === "working" || phase === "writing") {
-        setMessages((m) =>
-          m.map((msg) => (msg.id === asstId ? { ...msg, phase } : msg)),
-        );
-      }
-    } else if (eventName === "activity" && data && typeof data === "object") {
-      const obj = data as Record<string, unknown>;
-      const tool = typeof obj.tool === "string" ? obj.tool : "";
-      const label = typeof obj.label === "string" ? obj.label : tool;
-      if (label) {
-        setMessages((m) =>
-          m.map((msg) =>
-            msg.id === asstId
-              ? { ...msg, activities: [...(msg.activities ?? []), { tool, label }] }
-              : msg,
-          ),
-        );
-      }
-    } else if (eventName === "retrieval" && data && typeof data === "object") {
-      const chunks = (data as { chunks?: unknown }).chunks;
-      if (Array.isArray(chunks)) {
-        const normalized: RetrievalChunk[] = chunks
-          .map((c) => {
-            if (!c || typeof c !== "object") return null;
-            const obj = c as Record<string, unknown>;
-            return {
-              path: typeof obj.path === "string" ? obj.path : "",
-              title: typeof obj.title === "string" ? obj.title : "",
-              distance: typeof obj.distance === "number" ? obj.distance : null,
-            };
-          })
-          .filter((c): c is RetrievalChunk => c !== null);
-        setMessages((m) =>
-          m.map((msg) =>
-            msg.id === asstId
-              ? { ...msg, retrieval: [...(msg.retrieval ?? []), ...normalized] }
-              : msg,
-          ),
-        );
-      }
-    } else if (eventName === "result" && data && typeof data === "object") {
-      const result = (data as { result?: unknown }).result;
-      const claudeSessionId = (data as { sessionId?: unknown }).sessionId;
-      if (typeof result === "string" && result) {
-        setMessages((m) =>
-          m.map((msg) =>
-            msg.id === asstId ? { ...msg, content: result, phase: "done" } : msg,
-          ),
-        );
-      } else {
-        setMessages((m) =>
-          m.map((msg) => (msg.id === asstId ? { ...msg, phase: "done" } : msg)),
-        );
-      }
-      // Reconcile URL with claude's real session id (only on first turn,
-      // when our client-minted uuid doesn't match what claude returned).
-      if (
-        typeof claudeSessionId === "string" &&
-        claudeSessionId &&
-        claudeSessionId !== sessionIdRef.current
-      ) {
-        sessionIdRef.current = claudeSessionId;
-        if (typeof window !== "undefined") {
-          window.history.replaceState(null, "", `/chat/${claudeSessionId}`);
-        }
-      }
-    } else if (eventName === "error" && data && typeof data === "object") {
-      const message = String((data as { message?: unknown }).message ?? "stream error");
-      setMessages((m) =>
-        m.map((msg) => (msg.id === asstId ? { ...msg, error: message, streaming: false } : msg)),
-      );
-    }
-  };
-
-  const send = async () => {
+  const send = () => {
     const q = input.trim();
     if (!q || isStreaming) return;
 
@@ -217,65 +109,52 @@ export function ChatWindow({
     };
     setMessages((m) => [...m, userMsg, asstMsg]);
     setIsStreaming(true);
+    const asstId = asstMsg.id;
+    const update = (fn: (msg: Message) => Message) =>
+      setMessages((m) => m.map((msg) => (msg.id === asstId ? fn(msg) : msg)));
 
-    const controller = new AbortController();
-    abortRef.current = controller;
-
-    try {
-      const res = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question: q, sessionId: sessionIdRef.current, think }),
-        signal: controller.signal,
-      });
-      if (res.status === 409) {
-        const data = (await res.json().catch(() => ({}))) as { message?: string };
-        throw new Error(
-          data.message ?? "Another tab is replying — try again in a moment."
-        );
-      }
-      if (!res.ok || !res.body) {
-        throw new Error(`chat api ${res.status}`);
-      }
-
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buf = "";
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buf += decoder.decode(value, { stream: true });
-        // SSE frames are separated by blank lines.
-        let sep;
-        while ((sep = buf.indexOf("\n\n")) !== -1) {
-          const frame = buf.slice(0, sep);
-          buf = buf.slice(sep + 2);
-          handleFrame(frame, asstMsg.id);
-        }
-      }
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      setMessages((m) =>
-        m.map((msg) =>
-          msg.id === asstMsg.id
-            ? { ...msg, streaming: false, error: message || "stream failed" }
-            : msg
-        )
-      );
-    } finally {
-      setIsStreaming(false);
-      abortRef.current = null;
-      setMessages((m) =>
-        m.map((msg) =>
-          msg.id === asstMsg.id ? { ...msg, streaming: false, phase: "done" } : msg,
-        ),
-      );
-    }
+    // Shared SSE consumer (lib/use-chat-stream) — the same parser the command
+    // bar's "Ask Curly" mode uses. Behavior here is unchanged from the inline
+    // version it replaced.
+    abortRef.current = streamChat(
+      { question: q, sessionId: sessionIdRef.current, think },
+      {
+        onRetrieval: (chunks) =>
+          update((msg) => ({ ...msg, retrieval: [...(msg.retrieval ?? []), ...chunks] })),
+        onActivity: (a) =>
+          update((msg) => ({ ...msg, activities: [...(msg.activities ?? []), a] })),
+        onPhase: (phase) => update((msg) => ({ ...msg, phase })),
+        onThinking: (text) =>
+          update((msg) => ({
+            ...msg,
+            thinking: (msg.thinking ?? "") + text,
+            phase: "thinking",
+          })),
+        onDelta: (text) =>
+          update((msg) => ({ ...msg, content: msg.content + text, phase: "writing" })),
+        onResult: (r) => {
+          update((msg) => ({ ...msg, ...(r.result ? { content: r.result } : {}), phase: "done" }));
+          // Reconcile URL with claude's real session id (first turn only).
+          if (r.sessionId && r.sessionId !== sessionIdRef.current) {
+            sessionIdRef.current = r.sessionId;
+            if (typeof window !== "undefined") {
+              window.history.replaceState(null, "", `/chat/${r.sessionId}`);
+            }
+          }
+        },
+        onError: (message) =>
+          update((msg) => ({ ...msg, error: message || "stream failed", streaming: false })),
+        onClose: () => {
+          setIsStreaming(false);
+          abortRef.current = null;
+          update((msg) => ({ ...msg, streaming: false, phase: "done" }));
+        },
+      },
+    );
   };
 
   const newConversation = () => {
-    abortRef.current?.abort();
+    abortRef.current?.cancel();
     router.push("/chat");
   };
 
