@@ -5,6 +5,7 @@ import { useVoice } from "@/lib/voice/VoiceContext";
 import { Markdown } from "@/components/Markdown";
 import { GraphPanel } from "@/components/stage/GraphPanel";
 import { noteHref } from "@/lib/vault-paths";
+import { resolveTarget } from "@/lib/stage-targets";
 
 // Curly's integrated surface: a right-side slide-over (bottom sheet on mobile)
 // that is part of the OS chrome. Holds the ONE transient thing Curly surfaced
@@ -45,6 +46,13 @@ function XIcon() {
   );
 }
 
+// A list/actions item target -> an internal href, if it resolves to a route.
+function targetHref(target?: string): string | undefined {
+  if (!target) return undefined;
+  const r = resolveTarget(target);
+  return r.mode === "route" ? r.href : undefined;
+}
+
 export function CurlyPanel() {
   const v = useVoice();
   const panel = v.panel;
@@ -52,9 +60,10 @@ export function CurlyPanel() {
 
   const open = v.panelOpen;
   const src = panel.sourcePath?.replace(/\/+$/, "") || null;
+  const items = panel.items ?? [];
 
-  // Determine if panel body is missing (error/empty state)
-  const hasBody = panel.kind === "graph" || Boolean(panel.body);
+  // Content present? (markdown body, structured items, or a graph)
+  const hasContent = panel.kind === "graph" || Boolean(panel.body) || items.length > 0;
 
   return (
     <>
@@ -109,8 +118,40 @@ export function CurlyPanel() {
               {panel.title && (
                 <h2 className="mb-2 text-sm font-semibold text-foreground">{panel.title}</h2>
               )}
-              {hasBody ? (
-                <Markdown>{panel.body!}</Markdown>
+              {hasContent ? (
+                <>
+                  {panel.body && <Markdown>{panel.body}</Markdown>}
+                  {items.length > 0 && (
+                    <ul className="mt-2 space-y-2">
+                      {items.map((it, idx) => {
+                        const href = it.href ?? targetHref(it.target);
+                        const row = (
+                          <div className="rounded-lg border border-border bg-surface-2 px-3 py-2">
+                            <div className="text-sm text-foreground">{it.title}</div>
+                            {it.subtitle && (
+                              <div className="mt-0.5 text-xs text-muted">{it.subtitle}</div>
+                            )}
+                          </div>
+                        );
+                        return (
+                          <li key={idx}>
+                            {href ? (
+                              <Link
+                                href={href}
+                                onClick={v.closePanel}
+                                className="block transition-opacity hover:opacity-80"
+                              >
+                                {row}
+                              </Link>
+                            ) : (
+                              row
+                            )}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                </>
               ) : (
                 /* Error / empty state — rose-tinted notice */
                 <div

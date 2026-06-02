@@ -1,13 +1,22 @@
 // Shared types for the voice-first OS "stage" — mirrors the curly-voice WS
 // wire contract (server.ts emitUI: {type:'ui', intent, id, ts, source, payload}).
 
-export type StageKind = 'snippets' | 'note' | 'web' | 'task';
+export type StageKind = 'snippets' | 'note' | 'web' | 'task' | 'list' | 'actions';
+
+// A structured row for 'list'/'actions' panels (options, steps, links).
+export interface PanelItem {
+  title: string;
+  subtitle?: string;
+  href?: string; // internal route or note path (rendered as a Link)
+  target?: string; // a navigate target resolved client-side (an action)
+}
 
 export interface ShowPayload {
   kind: StageKind;
   title: string;
   body: string;
   sourcePath: string | null;
+  items?: PanelItem[];
 }
 
 export interface NavPayload {
@@ -36,6 +45,7 @@ export interface ContentCard {
   title: string;
   body: string;
   sourcePath: string | null;
+  items?: PanelItem[];
 }
 
 export interface GraphCard {

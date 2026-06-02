@@ -23,7 +23,10 @@ export const ROUTE_TARGETS: Record<string, string> = {
   surface: "/surface",
 };
 
-export type Resolved = { mode: "route"; href: string } | { mode: "graph"; nodeId: string | null };
+export type Resolved =
+  | { mode: "route"; href: string }
+  | { mode: "graph"; nodeId: string | null }
+  | { mode: "none"; query: string };
 
 export function resolveTarget(target: string): Resolved {
   const key = target.trim().toLowerCase();
@@ -32,7 +35,8 @@ export function resolveTarget(target: string): Resolved {
   if (target.endsWith(".md")) return { mode: "route", href: noteHref(target) };
   // a vault directory path -> the notes browser
   if (target.includes("/")) return { mode: "route", href: noteHref(target.replace(/\/+$/, "")) };
-  // graph-ish words -> the panel graph
+  // ONLY explicit graph-ish words open the mind graph.
   if (/\bgraph|mind ?map|network|connections?\b/.test(key)) return { mode: "graph", nodeId: null };
-  return { mode: "graph", nodeId: null };
+  // otherwise: don't silently open the graph — let the caller say "couldn't find it".
+  return { mode: "none", query: target };
 }

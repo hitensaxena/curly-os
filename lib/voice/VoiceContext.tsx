@@ -13,7 +13,7 @@ export type { VoiceState };
 // One transient panel of content the orb surfaced (recall snippets, web result,
 // think_hard answer, a note, or a graph). Replaces the old floating card stack.
 export interface PanelContent {
-  kind: "snippets" | "note" | "web" | "task" | "graph";
+  kind: "snippets" | "note" | "web" | "task" | "graph" | "list" | "actions";
   id: string;
   ts: number;
   source: string;
@@ -21,6 +21,7 @@ export interface PanelContent {
   body: string;
   sourcePath: string | null;
   nodeId?: string | null;
+  items?: { title: string; subtitle?: string; href?: string; target?: string }[];
 }
 
 export interface VoiceHere {

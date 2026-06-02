@@ -13,6 +13,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import type { GraphPayload, NavPayload, ShowPayload, UIFrame, VoiceState } from './stage/types';
 import { resolveTarget } from '@/lib/stage-targets';
 import { useVoice, type VoiceHere } from '@/lib/voice/VoiceContext';
+import { useToast } from '@/components/ui/ToastProvider';
 import { VOICE_COLORS as COLORS } from '@/lib/voice/colors';
 
 const CAPTURE_RATE = 16000;
@@ -28,6 +29,7 @@ function wsUrl(): string {
 
 export function CurlyOrb() {
   const v = useVoice();
+  const toast = useToast();
 
   // refs (hot-path / long-lived — never trigger renders)
   const stateRef = useRef<VoiceState>('idle');
@@ -45,6 +47,9 @@ export function CurlyOrb() {
   const liveSourcesRef = useRef<Set<AudioBufferSourceNode>>(new Set());
   const accRef = useRef<Int16Array>(new Int16Array(0));
   const endedTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // watchdog timestamps (so the orb never gets stuck) — control path only.
+  const connectingSinceRef = useRef(0);
+  const lastActivityRef = useRef(0);
 
   // visualizer refs
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -152,11 +157,12 @@ export function CurlyOrb() {
       const target = (msg.payload as NavPayload)?.target ?? '';
       const r = resolveTarget(target);
       if (r.mode === 'route') router.push(r.href);
-      else
+      else if (r.mode === 'graph')
         v._setPanel({
           kind: 'graph', id: msg.id, ts: msg.ts, source: msg.source,
           title: 'Your mind', body: '', sourcePath: null, nodeId: r.nodeId,
         });
+      else toast.info(`Couldn’t find “${r.query}”.`);
       return;
     }
     if (msg.intent === 'show') {
@@ -169,7 +175,10 @@ export function CurlyOrb() {
         title: p?.title ?? '',
         body: p?.body ?? '',
         sourcePath: p?.sourcePath ?? null,
+        items: p?.items,
       });
+      // add_here / remember confirmations also surface as an unmissable toast.
+      if (msg.source === 'tool:remember' && p?.title) toast.success(p.title);
     }
   }
 
@@ -200,6 +209,7 @@ export function CurlyOrb() {
     if (runningRef.current) return;
     runningRef.current = true;
     setVoiceState('connecting');
+    connectingSinceRef.current = Date.now();
     try {
       const playCtx = new AudioContext({ sampleRate: PLAYBACK_RATE });
       await playCtx.resume();
@@ -239,6 +249,7 @@ export function CurlyOrb() {
         if (hereRef.current) sendContext(hereRef.current);
       };
       ws.onmessage = (ev) => {
+        lastActivityRef.current = Date.now(); // watchdog: any inbound frame = alive
         if (typeof ev.data === 'string') {
           let msg: any;
           try {
@@ -526,9 +537,30 @@ export function CurlyOrb() {
     };
     rafRef.current = requestAnimationFrame(draw);
 
+    // Watchdog: the orb must never get stuck. If connect hangs, or a reply
+    // never finishes (frames stop without onended firing), recover. Control
+    // path only — never touches the audio graph / analyser / RAF.
+    const watchdog = setInterval(() => {
+      if (!runningRef.current) return;
+      const now = Date.now();
+      const st = stateRef.current;
+      if (st === 'connecting' && connectingSinceRef.current && now - connectingSinceRef.current > 12000) {
+        setVoiceState('error');
+        void stop();
+      } else if (
+        st === 'speaking' &&
+        liveSourcesRef.current.size === 0 &&
+        lastActivityRef.current &&
+        now - lastActivityRef.current > 1500
+      ) {
+        setVoiceState('listening');
+      }
+    }, 1000);
+
     return () => {
       mountedRef.current = false;
       window.removeEventListener('resize', resize);
+      clearInterval(watchdog);
       if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
       rafRef.current = null;
       void stop();
