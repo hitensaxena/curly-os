@@ -9,6 +9,10 @@ import { noteHref } from "@/lib/vault-paths";
 import { Card } from "@/components/ui/Card";
 import { QuickCapture } from "@/components/dashboard/QuickCapture";
 import { PageHeading } from "@/components/ui/PageHeading";
+import { Briefing } from "@/components/dashboard/Briefing";
+import { BriefingNudge } from "@/components/dashboard/BriefingNudge";
+import { getBriefing } from "@/lib/briefing";
+import { summarizePendingChats } from "@/lib/summarize";
 
 export const dynamic = "force-dynamic";
 
@@ -41,14 +45,19 @@ const QUICK_LINKS = [
 ];
 
 export default async function Home() {
-  const [user, stats, recent, today, last, projects] = await Promise.all([
+  const [user, stats, recent, today, last, projects, briefing] = await Promise.all([
     getCurrentUser().catch(() => null),
     brain.stats().catch(() => null),
     recentNotes(8).catch(() => []),
     todayJournal().catch(() => null),
     lastJournal().catch(() => null),
     listProjects().catch(() => []),
+    getBriefing().catch(() => null),
   ]);
+
+  // Lazy, fire-and-forget: nudge one lagging chat toward a summary per load.
+  // No-op once everything is caught up (chatsNeedingResummary returns none).
+  void summarizePendingChats(1).catch(() => {});
   const topProjects = projects.filter((p) => p.status === "active").slice(0, 4);
   const vault = { files: fileCount(), links: linkCount() };
   let chats: ReturnType<typeof listChats> = [];
@@ -85,6 +94,14 @@ export default async function Home() {
           </div>
         }
       />
+
+      {briefing && <Briefing data={briefing} />}
+      {briefing && (
+        <BriefingNudge
+          journaledToday={briefing.journal.startedToday}
+          staleCount={briefing.staleTasks.length}
+        />
+      )}
 
       {/* Quick links */}
       <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
