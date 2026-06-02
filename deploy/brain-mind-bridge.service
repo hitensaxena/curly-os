@@ -1,0 +1,17 @@
+# mind -> brain sync (oneshot, driven by the .timer). Install both:
+#   sudo cp deploy/brain-mind-bridge.{service,timer} /etc/systemd/system/
+#   sudo systemctl daemon-reload && sudo systemctl enable --now brain-mind-bridge.timer
+[Unit]
+Description=Sync mind markdown into the brain service (incremental git-diff)
+After=network.target docker.service
+
+[Service]
+Type=oneshot
+User=hiten
+WorkingDirectory=/home/hiten/code/curly-os
+Environment=BRAIN_URL=http://127.0.0.1:8077
+# Reads BRAIN_API_KEY from ~/brain/.env if not set in env.
+ExecStart=/usr/bin/python3 /home/hiten/code/curly-os/scripts/mind_brain_bridge.py
+# Needs to write ~/mind (defensive autocommit of a dirty tree before diffing).
+ProtectHome=read-only
+ReadWritePaths=/home/hiten/code/curly-os/data /home/hiten/mind

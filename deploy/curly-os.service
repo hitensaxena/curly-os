@@ -1,0 +1,42 @@
+# Curly OS — host systemd service (system-scoped). Install:
+#   sudo cp deploy/curly-os.service /etc/systemd/system/
+#   sudo systemctl daemon-reload && sudo systemctl enable --now curly-os
+#
+# Runs on the HOST (not Docker) because the spawned `claude` CLI carries live
+# ~/.claude OAuth creds and spawns the host mind venv. Modeled on
+# crazymage-web.service, but with the sandbox WIDENED — the key correction:
+# the app must write ~/mind (capture, note edits) and ~/.claude (claude
+# --resume session writes + OAuth refresh), which crazymage's data-only
+# ReadWritePaths would block.
+[Unit]
+Description=Curly OS — personal OS web app (Next.js)
+After=network.target docker.service
+Wants=network.target
+
+[Service]
+Type=simple
+User=hiten
+WorkingDirectory=/home/hiten/code/curly-os
+# ~/.local/bin first so the spawned `claude` CLI resolves.
+Environment=PATH=/home/hiten/.local/bin:/usr/local/bin:/usr/bin:/bin
+Environment=NODE_ENV=production
+Environment=HOME=/home/hiten
+Environment=PORT=3100
+Environment=HOSTNAME=127.0.0.1
+Environment=BRAIN_URL=http://127.0.0.1:8077
+# Real Authentik username allowed in prod — confirm at deploy (akadmin vs crazymage).
+Environment=CURLY_ALLOWED_USER=akadmin
+# BRAIN_API_KEY is read from ~/brain/.env by lib/brain.ts (home is readable);
+# set it explicitly here if you prefer: Environment=BRAIN_API_KEY=...
+ExecStart=/usr/bin/npm run start -- -H 127.0.0.1 -p 3100
+Restart=on-failure
+RestartSec=3
+
+# --- Sandbox: read-only home EXCEPT the paths the app legitimately writes ---
+ProtectHome=read-only
+ReadWritePaths=/home/hiten/code/curly-os/data /home/hiten/mind /home/hiten/.claude
+ProtectSystem=full
+NoNewPrivileges=false
+
+[Install]
+WantedBy=multi-user.target
