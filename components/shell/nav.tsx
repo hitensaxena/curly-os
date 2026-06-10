@@ -49,6 +49,8 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/chat", label: "Chat", Icon: ChatIcon },
       { href: "/agent", label: "Agent", Icon: BoltIcon },
       { href: "/surface", label: "Surface", Icon: OrbIcon },
+      { href: "/runs", label: "Runs", Icon: RunsIcon },
+      { href: "/approvals", label: "Approvals", Icon: ApprovalsIcon },
     ],
   },
   {
@@ -269,6 +271,24 @@ export function WorkspaceIcon(p: SVGProps<SVGSVGElement>) {
       <rect x="14" y="3" width="7" height="7" rx="1" />
       <rect x="3" y="14" width="7" height="7" rx="1" />
       <rect x="14" y="14" width="7" height="7" rx="1" />
+    </svg>
+  );
+}
+// Runs — a play button inside a loop/cycle arc.
+export function RunsIcon(p: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...base} {...p}>
+      <path d="M17.7 7.3A8 8 0 1 0 19 12" />
+      <path d="M10 9l5 3-5 3V9z" />
+    </svg>
+  );
+}
+// Approvals — a shield with a check mark.
+export function ApprovalsIcon(p: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...base} {...p}>
+      <path d="M12 3 4 6v6c0 4 3.6 7.7 8 9 4.4-1.3 8-5 8-9V6z" />
+      <path d="M9 12l2 2 4-4" />
     </svg>
   );
 }

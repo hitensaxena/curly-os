@@ -313,3 +313,117 @@ export interface CreateDecisionBody {
   goal_id?: string;
   review_at?: string;
 }
+
+// --- Agent Runs --------------------------------------------------------------
+
+export type AgentRunStatus = "running" | "parked" | "completed" | "failed" | "cancelled";
+
+export interface AgentRunResult {
+  summary?: string;
+  steps?: number;
+  denied?: string[];
+}
+
+export interface AgentRun {
+  id: string;
+  agent: string;
+  task: string;
+  status: AgentRunStatus;
+  result: AgentRunResult | null;
+  error: string | null;
+  created_at: string;
+  finished_at: string | null;
+}
+
+export interface AgentRunAction {
+  id: string;
+  kind: string;
+  payload: {
+    tool: string;
+    args: Record<string, unknown>;
+    cursor?: string;
+    why?: string;
+  };
+  created_at: string;
+  observation: Record<string, unknown> | null;
+}
+
+export interface AgentRunToolCall {
+  id: string;
+  tool: string;
+  args: Record<string, unknown>;
+  entry_hash: string;
+  created_at: string;
+}
+
+export interface AgentRunApproval {
+  apv_id: string;
+  action_class: string;
+  payload: {
+    tool?: string;
+    args?: Record<string, unknown>;
+    why?: string;
+    cursor?: string;
+  } | null;
+  state: string;
+  origin: string;
+  created_at: string;
+  decided_at: string | null;
+}
+
+export interface AgentRunDetail extends AgentRun {
+  actions: AgentRunAction[];
+  tool_calls: AgentRunToolCall[];
+  approvals: AgentRunApproval[];
+}
+
+export interface CreateRunBody {
+  task: string;
+}
+
+export interface CreateRunResult {
+  run_id: string;
+  status: string;
+}
+
+export interface RunActionResult {
+  run_id: string;
+  status: string;
+}
+
+// --- Approvals ---------------------------------------------------------------
+
+export type ApprovalOrigin = "agent" | "human";
+
+export interface PendingApproval {
+  apv_id: string;
+  run_id: string | null;
+  origin: ApprovalOrigin;
+  action_class: string;
+  payload: {
+    tool?: string;
+    args?: Record<string, unknown>;
+    why?: string;
+    cursor?: string;
+  } | null;
+  expires_at: string | null;
+  created_at: string;
+}
+
+export interface ApprovalActionResult {
+  apv_id: string;
+  state: string;
+  run_id: string | null;
+  action_class: string;
+  resumed?: boolean;
+}
+
+// --- SSE Events --------------------------------------------------------------
+
+export interface SseEvent {
+  seq: number;
+  type: string;
+  subject: string | null;
+  data: Record<string, unknown>;
+  at: string;
+}

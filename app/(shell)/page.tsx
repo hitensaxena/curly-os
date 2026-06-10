@@ -1,6 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
+import { useEventStream } from "@/lib/use-event-stream";
+import type { SseEvent } from "@/lib/curlyos-types";
 
 const API = "";
 
@@ -50,6 +53,11 @@ const TIER_COLOR: Record<string, string> = {
   graph:    "bg-green-500/70",
 };
 
+interface AgentBadgeCounts {
+  activeRuns: number;
+  pendingApprovals: number;
+}
+
 export default function Dashboard() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [composition, setComposition] = useState<Composition | null>(null);
@@ -57,6 +65,20 @@ export default function Dashboard() {
   const [search, setSearch] = useState("");
   const [results, setResults] = useState<{ id: string; statement: string; score: number }[]>([]);
   const [loading, setLoading] = useState(true);
+  const [agentCounts, setAgentCounts] = useState<AgentBadgeCounts>({ activeRuns: 0, pendingApprovals: 0 });
+
+  const loadAgentCounts = () => {
+    Promise.all([
+      fetch(`${API}/api/agents/runs?status=running&limit=50`).then((r) => r.ok ? r.json() : { items: [] }).catch(() => ({ items: [] })),
+      fetch(`${API}/api/agents/runs?status=parked&limit=50`).then((r) => r.ok ? r.json() : { items: [] }).catch(() => ({ items: [] })),
+      fetch(`${API}/api/approvals`).then((r) => r.ok ? r.json() : { count: 0 }).catch(() => ({ count: 0 })),
+    ]).then(([running, parked, approvals]) => {
+      setAgentCounts({
+        activeRuns: (running.items?.length ?? 0) + (parked.items?.length ?? 0),
+        pendingApprovals: approvals.count ?? 0,
+      });
+    });
+  };
 
   useEffect(() => {
     Promise.all([
@@ -69,7 +91,18 @@ export default function Dashboard() {
       setComposition(c);
       setLoading(false);
     });
-  }, []);
+    loadAgentCounts();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEventStream(["agent", "safety"], (evt: SseEvent) => {
+    if (
+      evt.type.startsWith("agent.run.") ||
+      evt.type.startsWith("agent.approval.") ||
+      evt.type.startsWith("safety.")
+    ) {
+      loadAgentCounts();
+    }
+  });
 
   useEffect(() => {
     if (!search.trim()) { setResults([]); return; }
@@ -107,10 +140,35 @@ export default function Dashboard() {
     : [];
   const tierTotal = tierEntries.reduce((a, b) => a + b.count, 0);
 
+  const hasAgentActivity = agentCounts.activeRuns > 0 || agentCounts.pendingApprovals > 0;
+
   return (
     <div className="mx-auto w-full max-w-6xl px-5 py-8 sm:px-8">
       <h1 className="text-2xl font-bold text-foreground mb-1">CurlyOS</h1>
-      <p className="text-sm text-muted mb-8">Your cognitive architecture — memory, knowledge, identity, cognition.</p>
+      <p className="text-sm text-muted mb-4">Your cognitive architecture — memory, knowledge, identity, cognition.</p>
+
+      {/* Agent activity strip */}
+      {hasAgentActivity && (
+        <div className="mb-6 flex items-center gap-3 flex-wrap">
+          {agentCounts.activeRuns > 0 && (
+            <Link
+              href="/runs"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-accent/30 bg-accent/10 px-3 py-1.5 text-xs text-accent hover:bg-accent/20 transition-colors"
+            >
+              <span className="inline-block w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />
+              {agentCounts.activeRuns} run{agentCounts.activeRuns !== 1 ? "s" : ""} active
+            </Link>
+          )}
+          {agentCounts.pendingApprovals > 0 && (
+            <Link
+              href="/approvals"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-yellow-400/30 bg-yellow-400/10 px-3 py-1.5 text-xs text-yellow-400 hover:bg-yellow-400/20 transition-colors"
+            >
+              {agentCounts.pendingApprovals} approval{agentCounts.pendingApprovals !== 1 ? "s" : ""} waiting
+            </Link>
+          )}
+        </div>
+      )}
 
       {/* Search */}
       <div className="mb-8">

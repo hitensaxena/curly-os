@@ -1,8 +1,13 @@
 // Tiny typed client for the CurlyOS backend, reachable via the /api/* proxy.
 // Server-and-client safe — relative URLs only, no node imports.
 import type {
+  AgentRun,
+  AgentRunDetail,
+  ApprovalActionResult,
   CreateDecisionBody,
   CreateGoalBody,
+  CreateRunBody,
+  CreateRunResult,
   Decision,
   EngineTriggerResult,
   EventItem,
@@ -12,6 +17,8 @@ import type {
   HealthStatus,
   LogResponse,
   LogSource,
+  PendingApproval,
+  RunActionResult,
   Stats,
   SystemsStatus,
 } from "@/lib/curlyos-types";
@@ -143,4 +150,74 @@ export async function reviewDecision(
     },
   );
   return r.json() as Promise<Decision>;
+}
+
+// --- Agent Runs --------------------------------------------------------------
+
+export function getAgentRuns(params?: {
+  status?: string;
+  agent?: string;
+  limit?: number;
+}): Promise<{ items: AgentRun[]; count: number }> {
+  const q = new URLSearchParams();
+  if (params?.status) q.set("status", params.status);
+  if (params?.agent) q.set("agent", params.agent);
+  if (params?.limit !== undefined) q.set("limit", String(params.limit));
+  const qs = q.toString() ? `?${q.toString()}` : "";
+  return getJSON<{ items: AgentRun[]; count: number }>(`/api/agents/runs${qs}`);
+}
+
+export function getAgentRun(id: string): Promise<AgentRunDetail> {
+  return getJSON<AgentRunDetail>(`/api/agents/runs/${encodeURIComponent(id)}`);
+}
+
+export async function createAgentRun(body: CreateRunBody): Promise<CreateRunResult> {
+  const r = await fetch("/api/agents/runs", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  return r.json() as Promise<CreateRunResult>;
+}
+
+export async function resumeAgentRun(id: string): Promise<RunActionResult> {
+  const r = await fetch(`/api/agents/runs/${encodeURIComponent(id)}/resume`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+  });
+  return r.json() as Promise<RunActionResult>;
+}
+
+export async function cancelAgentRun(id: string): Promise<RunActionResult> {
+  const r = await fetch(`/api/agents/runs/${encodeURIComponent(id)}/cancel`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+  });
+  return r.json() as Promise<RunActionResult>;
+}
+
+// --- Approvals ---------------------------------------------------------------
+
+export function getPendingApprovals(): Promise<{ items: PendingApproval[]; count: number }> {
+  return getJSON<{ items: PendingApproval[]; count: number }>("/api/approvals");
+}
+
+export async function grantApproval(id: string): Promise<ApprovalActionResult> {
+  const r = await fetch(`/api/approvals/${encodeURIComponent(id)}/grant`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+  });
+  return r.json() as Promise<ApprovalActionResult>;
+}
+
+export async function denyApproval(
+  id: string,
+  reason: string,
+): Promise<ApprovalActionResult> {
+  const r = await fetch(`/api/approvals/${encodeURIComponent(id)}/deny`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ reason }),
+  });
+  return r.json() as Promise<ApprovalActionResult>;
 }
