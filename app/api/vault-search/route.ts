@@ -1,16 +1,18 @@
 import { searchVaultContent, noteTitle } from "@/lib/vault-fs";
 import { searchFiles } from "@/lib/graph";
 import { searchChats } from "@/lib/chats-db";
-import { brain } from "@/lib/brain";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+// Local quick-search over the vault (notes + filenames) and past chats. Used by
+// the ⌘K command palette for fast navigation. Deep semantic search over the
+// cognitive store lives in curlyos-core and is reached via /api/search.
 export type SearchNote = {
   rel: string;
   title: string;
   snippet: string | null;
-  source: "content" | "name" | "brain";
+  source: "content" | "name";
 };
 
 export type SearchResponse = {
@@ -25,52 +27,18 @@ export type SearchResponse = {
   }[];
 };
 
-// Pull a vault-relative path out of a brain search hit (node or {node,...}).
-function relFromBrainHit(hit: unknown): string | null {
-  const node = (hit as { node?: unknown })?.node ?? hit;
-  const meta = (node as { metadata?: Record<string, unknown> })?.metadata ?? {};
-  const cand = meta.vault_path ?? meta.path;
-  if (typeof cand === "string" && cand.endsWith(".md")) return cand;
-  const id = (node as { id?: unknown })?.id;
-  if (typeof id === "string" && id.startsWith("mind:")) return id.slice(5);
-  return null;
-}
-
 export async function GET(request: Request) {
   const q = (new URL(request.url).searchParams.get("q") ?? "").trim();
   if (q.length < 2) {
     return Response.json({ q, notes: [], chats: [] } satisfies SearchResponse);
   }
 
-  const [contentRes, brainRes] = await Promise.allSettled([
-    searchVaultContent(q, 30),
-    brain.search(q, 8) as Promise<unknown>,
-  ]);
+  const content = await searchVaultContent(q, 30).catch(() => []);
 
-  const content = contentRes.status === "fulfilled" ? contentRes.value : [];
-  const brainRaw = brainRes.status === "fulfilled" ? brainRes.value : [];
-  const brainArr: unknown[] = Array.isArray(brainRaw)
-    ? brainRaw
-    : ((brainRaw as { hits?: unknown[]; results?: unknown[] })?.hits ??
-        (brainRaw as { results?: unknown[] })?.results ??
-        []);
-
-  // Merge by rel — content snippets win, then brain (semantic), then bare
-  // filename matches. Keeps results unique and useful.
+  // Merge by rel — content snippets win, then bare filename matches.
   const byRel = new Map<string, SearchNote>();
   for (const c of content) {
     byRel.set(c.rel, { rel: c.rel, title: "", snippet: c.snippet, source: "content" });
-  }
-  for (const hit of brainArr) {
-    const rel = relFromBrainHit(hit);
-    if (!rel || byRel.has(rel)) continue;
-    const snip = (hit as { snippet?: unknown })?.snippet;
-    byRel.set(rel, {
-      rel,
-      title: "",
-      snippet: typeof snip === "string" ? snip.slice(0, 160) : null,
-      source: "brain",
-    });
   }
   for (const rel of searchFiles(q, 30)) {
     if (byRel.has(rel)) continue;

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { Logo } from "@/components/Logo";
-import { NAV, SearchIcon } from "./nav";
+import { NAV_GROUPS, NAV_HOME, SearchIcon, type NavItem } from "./nav";
 
 // Floating navigation — a top-left menu button that opens the workspace list
 // (the old rail/bar nav, now a popover) plus a "search / ask Curly" entry that
@@ -51,7 +51,7 @@ export function FloatingNav() {
       {open && (
         <div
           role="menu"
-          className="absolute left-0 top-full mt-2 w-56 overflow-hidden rounded-xl border border-border-soft bg-surface/95 p-1.5 backdrop-blur-xl glow"
+          className="absolute left-0 top-full mt-2 max-h-[80vh] w-56 overflow-y-auto rounded-xl border border-border-soft bg-surface/95 p-1.5 backdrop-blur-xl glow"
         >
           <button
             type="button"
@@ -66,29 +66,49 @@ export function FloatingNav() {
             <kbd className="ml-auto rounded bg-surface px-1.5 py-0.5 text-[10px]">⌘K</kbd>
           </button>
           <div className="my-1 h-px bg-border" />
-          {NAV.map(({ href, label, Icon }) => {
-            const active = href === "/" ? pathname === "/" : pathname.startsWith(href);
-            return (
-              <Link
-                key={href}
-                href={href}
-                role="menuitem"
-                onClick={() => setOpen(false)}
-                aria-current={active ? "page" : undefined}
-                className={[
-                  "flex items-center gap-3 rounded-md px-2.5 py-2 text-sm transition-colors",
-                  active
-                    ? "border-l-2 border-accent bg-accent-soft text-foreground"
-                    : "text-muted hover:bg-surface-2 hover:text-foreground",
-                ].join(" ")}
-              >
-                <Icon className={`h-4 w-4 shrink-0 ${active ? "text-accent" : ""}`} />
-                {label}
-              </Link>
-            );
-          })}
+          <NavLink item={NAV_HOME} pathname={pathname} onNavigate={() => setOpen(false)} />
+          {NAV_GROUPS.map((group) => (
+            <div key={group.label} className="mt-1">
+              <div className="px-2.5 pb-0.5 pt-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted/60">
+                {group.label}
+              </div>
+              {group.items.map((item) => (
+                <NavLink key={item.href} item={item} pathname={pathname} onNavigate={() => setOpen(false)} />
+              ))}
+            </div>
+          ))}
         </div>
       )}
     </div>
+  );
+}
+
+function NavLink({
+  item,
+  pathname,
+  onNavigate,
+}: {
+  item: NavItem;
+  pathname: string;
+  onNavigate: () => void;
+}) {
+  const { href, label, Icon } = item;
+  const active = href === "/" ? pathname === "/" : pathname.startsWith(href);
+  return (
+    <Link
+      href={href}
+      role="menuitem"
+      onClick={onNavigate}
+      aria-current={active ? "page" : undefined}
+      className={[
+        "flex items-center gap-3 rounded-md px-2.5 py-2 text-sm transition-colors",
+        active
+          ? "border-l-2 border-accent bg-accent-soft text-foreground"
+          : "text-muted hover:bg-surface-2 hover:text-foreground",
+      ].join(" ")}
+    >
+      <Icon className={`h-4 w-4 shrink-0 ${active ? "text-accent" : ""}`} />
+      {label}
+    </Link>
   );
 }

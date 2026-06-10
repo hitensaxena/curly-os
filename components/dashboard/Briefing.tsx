@@ -14,7 +14,7 @@ export function Briefing({ data }: { data: BriefingData }) {
         <h2 className="text-sm font-semibold text-foreground">Your briefing</h2>
         <span className="shrink-0 text-xs text-muted">
           {health.files.toLocaleString()} notes ·{" "}
-          {health.brain ? `${health.brain.nodes.toLocaleString()} in brain` : "brain offline"}
+          {health.memory ? `${health.memory.memories.toLocaleString()} memories` : "core offline"}
         </span>
       </div>
 

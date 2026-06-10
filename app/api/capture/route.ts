@@ -5,7 +5,7 @@ export const dynamic = "force-dynamic";
 
 // Capture from the screen. mode:"journal" appends a timestamped block to today's
 // daily journal; mode:"note" creates/append a note in a chosen vault dir. Both
-// commit to the vault git + reindex + ingest into the brain (see lib/vault-fs).
+// commit to the vault git + trigger a reindex (see lib/vault-fs).
 type Body = {
   mode?: "journal" | "note";
   content?: unknown;

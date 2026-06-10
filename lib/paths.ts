@@ -3,6 +3,9 @@ import os from "node:os";
 
 export const HOME = os.homedir();
 export const VAULT = path.join(HOME, "mind");
+// Allowlist root for project `code:` dirs — bounds where the per-project chat's
+// agentic Curly is allowed to operate (read/edit/run) for code projects.
+export const CODE_ROOT = path.join(HOME, "code");
 export const CHROMA_VENV_PYTHON = path.join(VAULT, "systems", "chroma-venv", "bin", "python");
 export const CLAUDE_CHAT_PY = path.join(VAULT, "systems", "claude_chat.py");
 

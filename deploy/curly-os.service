@@ -23,11 +23,10 @@ Environment=NODE_ENV=production
 Environment=HOME=/home/hiten
 Environment=PORT=3100
 Environment=HOSTNAME=127.0.0.1
-Environment=BRAIN_URL=http://127.0.0.1:8077
+# curlyos-core API base (FastAPI). Defaults to 127.0.0.1:8643 if unset.
+Environment=CURLYOS_API_URL=http://127.0.0.1:8643
 # Real Authentik username allowed in prod — confirm at deploy (akadmin vs crazymage).
 Environment=CURLY_ALLOWED_USER=akadmin
-# BRAIN_API_KEY is read from ~/brain/.env by lib/brain.ts (home is readable);
-# set it explicitly here if you prefer: Environment=BRAIN_API_KEY=...
 ExecStart=/usr/bin/npm run start -- -H 127.0.0.1 -p 3100
 Restart=on-failure
 RestartSec=3

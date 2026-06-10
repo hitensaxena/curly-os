@@ -1,8 +1,8 @@
 # Deploying Curly OS → os.curlybrackets.art
 
 The app runs on the **host** (systemd), not Docker — the `claude` CLI it spawns
-carries live `~/.claude` OAuth creds and runs the host mind venv. brain
-(Neo4j/Chroma/api) and Authentik stay in Docker.
+carries live `~/.claude` OAuth creds and runs the host mind venv. The
+curlyos-core API (Postgres + pgvector) and Authentik run separately.
 
 Steps need sudo (hand to Hiten). Run from `~/code/curly-os`.
 
@@ -28,15 +28,7 @@ sudo systemctl enable --now curly-os
 journalctl -u curly-os -f         # watch it boot; confirm "Ready"
 ```
 
-### 4. mind→brain bridge timer (every 5 min)
-```
-sudo cp deploy/brain-mind-bridge.service deploy/brain-mind-bridge.timer /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable --now brain-mind-bridge.timer
-systemctl list-timers brain-mind-bridge.timer
-```
-
-### 5. Caddy
+### 4. Caddy
 Append `deploy/caddy-os.snippet` to `~/infra/caddy/Caddyfile`, then reload:
 ```
 cat deploy/caddy-os.snippet >> ~/infra/caddy/Caddyfile
@@ -45,7 +37,7 @@ sudo docker exec caddy caddy reload --config /etc/caddy/Caddyfile 2>/dev/null \
   || (cd ~/infra && sudo docker compose restart caddy)
 ```
 
-### 6. Authentik SSO
+### 5. Authentik SSO
 In `auth.curlybrackets.art` admin:
 1. **Provider** → create a *Proxy Provider* (Forward auth, single application),
    External host `https://os.curlybrackets.art`.
@@ -53,7 +45,7 @@ In `auth.curlybrackets.art` admin:
    journal. uses).
 3. Ensure Hiten's user is authorized for the app.
 
-### 7. Confirm the allow-listed username  ⚠️
+### 6. Confirm the allow-listed username  ⚠️
 `curly-os.service` sets `CURLY_ALLOWED_USER=akadmin` (from crazymage's code),
 but the Caddyfile comment says `crazymage`. Load `https://os.curlybrackets.art`;
 if you get the /forbidden page after SSO, the real username differs — set the
@@ -65,10 +57,10 @@ sudo systemctl restart curly-os
 (To discover it: `journalctl -u curly-os` won't print it; temporarily log
 `x-authentik-username` or check the Authentik user's username field.)
 
-### 8. End-to-end verify (M1 exit criterion)
+### 7. End-to-end verify (M1 exit criterion)
 From your **phone**: open `https://os.curlybrackets.art` → complete Authentik
-SSO → home shows the brain node count → send a chat → watch it stream
-(retrieval incl. 🧠 brain chunks → delta → result) → reload, confirm the
+SSO → home shows the curlyos-core memory count → send a chat → watch it stream
+(retrieval → delta → result) → reload, confirm the
 session persisted. Confirm in `journalctl -u curly-os` that the claude spawn +
 OAuth refresh worked **under the systemd sandbox** (not just an interactive
 shell — this is the riskiest assumption).

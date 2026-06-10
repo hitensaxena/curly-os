@@ -1,13 +1,25 @@
 // Proactive briefing — what Curly surfaces without being asked. A single
 // server-only aggregator over existing libs (journal, projects/tasks, chats,
-// graph/brain health). Every source is failure-guarded so a down brain or
-// missing chats-db degrades to an empty section rather than erroring the page.
+// vault + curlyos-core stats). Every source is failure-guarded so a down core
+// or missing chats-db degrades to an empty section rather than erroring the page.
 import { todayJournal, lastJournal, readVaultNote } from "@/lib/vault-fs";
 import { listChats } from "@/lib/chats-db";
 import { listProjects } from "@/lib/projects";
 import { parseTasks } from "@/lib/tasks";
 import { fileCount, linkCount } from "@/lib/graph";
-import { brain } from "@/lib/brain";
+import { CORE_URL } from "@/lib/core";
+
+// Memory/episode counts from curlyos-core; null if the core is unreachable.
+async function coreStats(): Promise<{ episodes: number; memories: number } | null> {
+  try {
+    const r = await fetch(`${CORE_URL}/api/stats`, { cache: "no-store" });
+    if (!r.ok) return null;
+    const s = (await r.json()) as { episodes?: number; memories?: number };
+    return { episodes: s.episodes ?? 0, memories: s.memories ?? 0 };
+  } catch {
+    return null;
+  }
+}
 
 export type BriefingTask = { project: string; slug: string; text: string };
 export type BriefingChat = { id: string; title: string; messageCount: number; startedAt: number };
@@ -23,7 +35,7 @@ export interface Briefing {
   staleTasks: BriefingTask[];
   resumeChats: BriefingChat[];
   suggestions: string[];
-  health: { files: number; links: number; brain: { nodes: number; chunks: number } | null };
+  health: { files: number; links: number; memory: { episodes: number; memories: number } | null };
 }
 
 function safe<T>(fn: () => T, fallback: T): T {
@@ -39,7 +51,7 @@ export async function getBriefing(): Promise<Briefing> {
     todayJournal().catch(() => null),
     lastJournal().catch(() => null),
     listProjects().catch(() => [] as Awaited<ReturnType<typeof listProjects>>),
-    brain.stats().catch(() => null),
+    coreStats(),
   ]);
 
   // Open tasks across active projects that have a folder + tasks.md.
@@ -87,7 +99,7 @@ export async function getBriefing(): Promise<Briefing> {
     health: {
       files: safe(() => fileCount(), 0),
       links: safe(() => linkCount(), 0),
-      brain: stats ? { nodes: stats.nodes, chunks: stats.chunks } : null,
+      memory: stats,
     },
   };
 }

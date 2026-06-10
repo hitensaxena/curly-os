@@ -6,7 +6,12 @@
 
 export type StreamPhase = "retrieving" | "thinking" | "working" | "writing" | "done";
 export type StreamActivity = { tool: string; label: string };
-export type StreamChunk = { path: string; title: string; distance: number | null };
+export type StreamChunk = {
+  kind?: "memory" | "note" | "identity";
+  path: string;
+  title: string;
+  distance: number | null;
+};
 export type StreamResult = {
   result?: string;
   sessionId?: string;
@@ -77,11 +82,16 @@ function dispatchFrame(frame: string, h: ChatStreamHandlers) {
         .map((c) => {
           if (!c || typeof c !== "object") return null;
           const x = c as Record<string, unknown>;
+          const kind: StreamChunk["kind"] =
+            x.kind === "memory" || x.kind === "note" || x.kind === "identity"
+              ? (x.kind as "memory" | "note" | "identity")
+              : undefined;
           return {
+            kind,
             path: typeof x.path === "string" ? x.path : "",
             title: typeof x.title === "string" ? x.title : "",
             distance: typeof x.distance === "number" ? x.distance : null,
-          };
+          } as StreamChunk;
         })
         .filter((c): c is StreamChunk => c !== null);
       if (normalized.length) h.onRetrieval?.(normalized);

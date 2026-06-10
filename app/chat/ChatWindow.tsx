@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { ChatMessage, type Activity, type Phase, type RetrievalChunk } from "./ChatMessage";
+import { ChatMessage, type Phase, type RetrievalChunk } from "./ChatMessage";
 import { streamChat } from "@/lib/use-chat-stream";
 import { useVoiceInput } from "@/lib/use-voice-input";
 import { VoicePrivacyNotice } from "@/components/VoicePrivacyNotice";
@@ -18,8 +18,6 @@ type Message = {
   streaming?: boolean;
   error?: string;
   retrieval?: RetrievalChunk[];
-  thinking?: string;
-  activities?: Activity[];
   phase?: Phase;
 };
 
@@ -121,15 +119,7 @@ export function ChatWindow({
       {
         onRetrieval: (chunks) =>
           update((msg) => ({ ...msg, retrieval: [...(msg.retrieval ?? []), ...chunks] })),
-        onActivity: (a) =>
-          update((msg) => ({ ...msg, activities: [...(msg.activities ?? []), a] })),
         onPhase: (phase) => update((msg) => ({ ...msg, phase })),
-        onThinking: (text) =>
-          update((msg) => ({
-            ...msg,
-            thinking: (msg.thinking ?? "") + text,
-            phase: "thinking",
-          })),
         onDelta: (text) =>
           update((msg) => ({ ...msg, content: msg.content + text, phase: "writing" })),
         onResult: (r) => {
@@ -168,8 +158,8 @@ export function ChatWindow({
               title={chatExists ? "Ask the vault anything" : "New conversation"}
               body={
                 chatExists
-                  ? "Each turn re-queries Chroma for fresh context."
-                  : "No chat exists at this URL yet — type below to start one. The URL will update to a permanent session id after Claude replies."
+                  ? "Each turn pulls fresh context from your long-term memory."
+                  : "No chat exists at this URL yet — type below to start one. The URL updates to a permanent session id once Curly replies."
               }
             />
           )}
@@ -181,8 +171,6 @@ export function ChatWindow({
               streaming={m.streaming}
               error={m.error}
               retrieval={m.retrieval}
-              thinking={m.thinking}
-              activities={m.activities}
               phase={m.phase}
             />
           ))}

@@ -6,25 +6,23 @@ import { useVoiceInput } from "@/lib/use-voice-input";
 import { VoicePrivacyNotice } from "@/components/VoicePrivacyNotice";
 import { Markdown } from "@/components/Markdown";
 import { AnimatedLogo } from "@/components/AnimatedLogo";
+import { GroundedOn, type RetrievalChunk } from "@/components/chat/GroundedOn";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { PageHeading } from "@/components/ui/PageHeading";
 import { relTime } from "@/lib/format";
 
-// The agent command center. A command (typed or spoken) becomes a fresh /api/chat
-// turn — the same backend that already reads/writes the vault and runs commands.
-// The point here is to WATCH it work: a live activity feed of what Curly is doing,
-// with the result persisted (reopenable as a chat).
+// The agent command center. A typed or spoken ask becomes a fresh /api/chat
+// turn, grounded in long-term memory + vault notes. Each run shows what it was
+// grounded on and is persisted (reopenable as a chat).
 type Phase = "retrieving" | "thinking" | "working" | "writing" | "done";
 
 type Run = {
   id: string;
   question: string;
   content: string;
-  activities: { tool: string; label: string }[];
-  retrieval: number;
-  thinking: string;
+  retrieval: RetrievalChunk[];
   phase?: Phase;
   error?: string;
   streaming: boolean;
@@ -43,26 +41,18 @@ export type HistoryItem = {
 };
 
 const EXAMPLES = [
-  "Summarize my last daily journal and save a one-line takeaway to ideas",
   "What have I been thinking about this week?",
-  "Find every note that mentions Mintrix and list them",
+  "Summarize what I know about Mintrix.",
+  "What are my stated priorities — and am I acting on them?",
 ];
 
 function uid() {
   return Math.random().toString(36).slice(2, 10);
 }
 
-function phaseLabel(run: Run): { label: string; state: "loading" | "thinking" | "drafting" } {
-  switch (run.phase) {
-    case "thinking":
-      return { label: "Thinking…", state: "thinking" };
-    case "working":
-      return { label: run.activities.at(-1)?.label ?? "Working…", state: "loading" };
-    case "writing":
-      return { label: "Writing…", state: "drafting" };
-    default:
-      return { label: "Searching the vault…", state: "loading" };
-  }
+function phaseLabel(run: Run): { label: string; state: "loading" | "drafting" } {
+  if (run.phase === "writing") return { label: "Writing…", state: "drafting" };
+  return { label: "Recalling…", state: "loading" };
 }
 
 export function AgentConsole({
@@ -101,25 +91,26 @@ export function AgentConsole({
       case "delta":
         patch(id, (r) => ({ ...r, content: r.content + String(data.text ?? ""), phase: "writing" }));
         break;
-      case "thinking":
-        patch(id, (r) => ({ ...r, thinking: r.thinking + String(data.text ?? ""), phase: "thinking" }));
+      case "phase":
+        if (data.phase === "writing") patch(id, (r) => ({ ...r, phase: "writing" }));
         break;
-      case "phase": {
-        const p = data.phase;
-        if (p === "thinking" || p === "working" || p === "writing") {
-          patch(id, (r) => ({ ...r, phase: p }));
-        }
-        break;
-      }
-      case "activity": {
-        const tool = typeof data.tool === "string" ? data.tool : "";
-        const label = typeof data.label === "string" ? data.label : tool;
-        if (label) patch(id, (r) => ({ ...r, activities: [...r.activities, { tool, label }] }));
-        break;
-      }
       case "retrieval": {
-        const n = Array.isArray(data.chunks) ? data.chunks.length : 0;
-        if (n) patch(id, (r) => ({ ...r, retrieval: r.retrieval + n }));
+        const raw = Array.isArray(data.chunks) ? data.chunks : [];
+        const chunks = raw
+          .map((c) => {
+            if (!c || typeof c !== "object") return null;
+            const x = c as Record<string, unknown>;
+            const kind =
+              x.kind === "memory" || x.kind === "note" || x.kind === "identity" ? x.kind : undefined;
+            return {
+              kind,
+              path: typeof x.path === "string" ? x.path : "",
+              title: typeof x.title === "string" ? x.title : "",
+              distance: typeof x.distance === "number" ? x.distance : null,
+            } as RetrievalChunk;
+          })
+          .filter((c): c is RetrievalChunk => c !== null);
+        if (chunks.length) patch(id, (r) => ({ ...r, retrieval: [...r.retrieval, ...chunks] }));
         break;
       }
       case "result": {
@@ -150,9 +141,7 @@ export function AgentConsole({
       id,
       question: q,
       content: "",
-      activities: [],
-      retrieval: 0,
-      thinking: "",
+      retrieval: [],
       phase: "retrieving",
       streaming: true,
       startedAt: Date.now(),
@@ -192,7 +181,7 @@ export function AgentConsole({
     <div className="mx-auto w-full max-w-3xl px-5 py-8 sm:px-8">
       <PageHeading
         title="Agent"
-        subtitle="Give Curly a task — it can read & write your vault, run commands, and search the web. Watch it work below."
+        subtitle="Ask Curly to reason over your long-term memory and notes. Each run shows what it was grounded on and is reopenable as a chat."
       />
 
       {/* Command bar */}
@@ -311,28 +300,9 @@ function RunCard({ run }: { run: Run }) {
     <Card padding="loose">
       <div className="mb-2 text-sm font-medium text-foreground">{run.question}</div>
 
-      {run.activities.length > 0 && (
-        <ul className="mb-2 space-y-0.5 text-[11px] text-muted">
-          {run.activities.map((a, i) => {
-            const last = i === run.activities.length - 1;
-            return (
-              <li key={i} className="flex items-center gap-2">
-                <span
-                  aria-hidden
-                  className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${
-                    run.streaming && last ? "animate-pulse bg-accent" : "bg-border"
-                  }`}
-                />
-                <span className="truncate">{a.label}</span>
-              </li>
-            );
-          })}
-        </ul>
-      )}
-
-      {run.retrieval > 0 && (
-        <div className="mb-2 font-mono text-[11px] text-muted">
-          Retrieved {run.retrieval} chunk{run.retrieval === 1 ? "" : "s"}
+      {run.retrieval.length > 0 && (
+        <div className="mb-2">
+          <GroundedOn chunks={run.retrieval} />
         </div>
       )}
 

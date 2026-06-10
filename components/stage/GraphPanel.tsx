@@ -11,17 +11,51 @@ const ForceGraphClient = dynamic(() => import('./ForceGraphClient'), {
   loading: () => <div className="grid h-[42dvh] place-items-center text-xs text-muted">drawing your mind…</div>,
 });
 
+// Adapt curlyos-core's knowledge-graph payloads to the force-graph shape.
+// Full graph: { nodes:[{id,name,label,degree}], links:[{source,target,rel_type}] }.
+// Node expand: { entities:[{id,name,label}], edges:[{src_entity_id,dst_entity_id,rel_type}] }.
+type CoreNode = { id: string; name?: string; label?: string; degree?: number };
+type CoreLink = { source: string; target: string; rel_type?: string };
+type CoreEntity = { id: string; name?: string; label?: string };
+type CoreEdge = { src_entity_id: string; dst_entity_id: string; rel_type?: string };
+
+function toStageGraph(d: unknown, nodeId: string | null): StageGraph {
+  const g = (d ?? {}) as Record<string, unknown>;
+  const rawNodes = (nodeId ? g.entities : g.nodes) as (CoreNode | CoreEntity)[] | undefined;
+  const nodes = (rawNodes ?? []).map((n) => ({
+    id: n.id,
+    label: n.name ?? n.id,
+    group: n.label ?? 'Entity',
+    val: (n as CoreNode).degree ?? 1,
+  }));
+  const ids = new Set(nodes.map((n) => n.id));
+  const links = nodeId
+    ? ((g.edges as CoreEdge[] | undefined) ?? []).map((e) => ({
+        source: e.src_entity_id,
+        target: e.dst_entity_id,
+        rel: e.rel_type,
+      })).filter((l) => ids.has(l.source) && ids.has(l.target))
+    : ((g.links as CoreLink[] | undefined) ?? []).map((l) => ({
+        source: l.source,
+        target: l.target,
+        rel: l.rel_type,
+      })).filter((l) => ids.has(l.source) && ids.has(l.target));
+  return { nodes, links };
+}
+
 export function GraphPanel({ nodeId, title, onNodeClick }: { nodeId: string | null; title?: string; onNodeClick?: (id: string) => void }) {
   const [graph, setGraph] = useState<StageGraph | null>(null);
   const [err, setErr] = useState(false);
 
   useEffect(() => {
     let alive = true;
-    const q = nodeId ? `?id=${encodeURIComponent(nodeId)}&depth=1` : '';
-    fetch(`/api/graph${q}`)
+    const url = nodeId
+      ? `/api/graph/${encodeURIComponent(nodeId)}/expand?k=1`
+      : `/api/graph`;
+    fetch(url)
       .then((r) => r.json())
-      .then((d: StageGraph) => {
-        if (alive) setGraph(d);
+      .then((d) => {
+        if (alive) setGraph(toStageGraph(d, nodeId));
       })
       .catch(() => {
         if (alive) setErr(true);

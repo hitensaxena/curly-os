@@ -1,20 +1,20 @@
 // Broad, sandboxed read/write access to the ~/mind vault for the OS surfaces
 // (dashboard, notes browser/reader/editor, capture). SERVER-ONLY — opens files,
-// shells out to git, and ingests into the brain. Never import from a client
+// and shells out to git. Never import from a client
 // component; go through the /api/notes, /api/capture, /api/dashboard routes.
 //
 // Write semantics mirror curly-voice/src/tools/capture.ts so notes written by
 // voice and by screen stay consistent: frontmatter (date/source), kebab-case
-// slugs, dated append for journal-style dirs, per-file git commit, brain ingest
-// + incremental reindex.
+// slugs, dated append for journal-style dirs, per-file git commit +
+// incremental reindex.
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import matter from "gray-matter";
 import { VAULT } from "@/lib/paths";
-import { brain } from "@/lib/brain";
 import { triggerReindex } from "@/lib/reindex";
+import { ingestToCore } from "@/lib/core";
 
 const pexec = promisify(execFile);
 
@@ -218,9 +218,9 @@ export async function noteTitle(rel: string): Promise<string> {
 }
 
 // Full-text content search over the content vault (systems/archives excluded),
-// one snippet per matching note. Prefers ripgrep, falls back to grep. Brain
-// semantic search only covers ~100 nodes, so this is what makes the other
-// ~1.2k notes findable by what's inside them.
+// one snippet per matching note. Prefers ripgrep, falls back to grep. This is
+// what makes notes findable by what's inside them (powers the ⌘K palette via
+// /api/vault-search); deep semantic recall lives in curlyos-core.
 export async function searchVaultContent(
   query: string,
   limit = 30,
@@ -348,33 +348,10 @@ async function commitFile(rel: string, message: string): Promise<boolean> {
   }
 }
 
-async function ingestNote(rel: string, content: string): Promise<boolean> {
-  try {
-    const parsed = matter(content);
-    const title =
-      (typeof parsed.data.title === "string" && parsed.data.title) ||
-      parsed.content.match(/^#\s+(.+)$/m)?.[1]?.trim() ||
-      path.basename(rel, ".md").replace(/[-_]/g, " ");
-    await brain.ingest({
-      id: `mind:${rel}`,
-      title,
-      content: parsed.content || content,
-      type: "note",
-      tags: Array.isArray(parsed.data.tags) ? parsed.data.tags.map(String) : [],
-      source_app: "curly-os",
-      metadata: { vault_path: rel },
-    });
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 export type WriteResult = {
   ok: boolean;
   rel: string;
   committed: boolean;
-  ingested: boolean;
   reason?: string;
 };
 
@@ -387,14 +364,14 @@ export async function saveVaultNote(
   expectedMtime?: number,
 ): Promise<WriteResult> {
   if (!isVaultWriteable(rel)) {
-    return { ok: false, rel, committed: false, ingested: false, reason: "not writeable" };
+    return { ok: false, rel, committed: false, reason: "not writeable" };
   }
   const full = resolveInVault(rel);
   if (expectedMtime != null) {
     try {
       const st = await fs.stat(full);
       if (Math.abs(st.mtimeMs - expectedMtime) > 1) {
-        return { ok: false, rel, committed: false, ingested: false, reason: "conflict" };
+        return { ok: false, rel, committed: false, reason: "conflict" };
       }
     } catch {
       /* new file — no conflict */
@@ -403,9 +380,8 @@ export async function saveVaultNote(
   await fs.mkdir(path.dirname(full), { recursive: true });
   await fs.writeFile(full, content, "utf8");
   const committed = await commitFile(rel, `curly-os: edit ${rel}`);
-  const ingested = await ingestNote(rel, content);
   triggerReindex();
-  return { ok: true, rel, committed, ingested };
+  return { ok: true, rel, committed };
 }
 
 // Append to today's daily journal (append-not-overwrite). Default block is a
@@ -429,9 +405,11 @@ export async function appendToJournal(input: {
   }
   await fs.writeFile(full, body, "utf8");
   const committed = await commitFile(rel, `curly-os: journal ${date}`);
-  const ingested = await ingestNote(rel, body);
+  // Mirror the new entry into curlyos-core (episode + memory + extraction).
+  // Failure-safe: a down core never blocks the journal write.
+  await ingestToCore(input.content, `journal:${date}`);
   triggerReindex();
-  return { ok: true, rel, committed, ingested };
+  return { ok: true, rel, committed };
 }
 
 // Append a dated section to an arbitrary writeable note (e.g. a project's
@@ -442,7 +420,7 @@ export async function appendToNote(
   heading?: string,
 ): Promise<WriteResult> {
   if (!isVaultWriteable(rel)) {
-    return { ok: false, rel, committed: false, ingested: false, reason: "not writeable" };
+    return { ok: false, rel, committed: false, reason: "not writeable" };
   }
   const full = resolveInVault(rel);
   await fs.mkdir(path.dirname(full), { recursive: true });
@@ -459,9 +437,8 @@ export async function appendToNote(
   }
   await fs.writeFile(full, body, "utf8");
   const committed = await commitFile(rel, `curly-os: note ${rel}`);
-  const ingested = await ingestNote(rel, body);
   triggerReindex();
-  return { ok: true, rel, committed, ingested };
+  return { ok: true, rel, committed };
 }
 
 // Full port of curly-voice remember(): new note in a chosen dir, dated filename
@@ -478,7 +455,7 @@ export async function captureNote(input: {
       ? input.directory
       : "ideas";
   if (READONLY_PREFIXES.some((p) => `${dir}/`.startsWith(p))) {
-    return { ok: false, rel: "", committed: false, ingested: false, reason: "directory not writeable" };
+    return { ok: false, rel: "", committed: false, reason: "directory not writeable" };
   }
   const date = today();
   const title = (input.title || input.content.split("\n")[0] || "note").slice(0, 80).trim();
@@ -497,7 +474,6 @@ export async function captureNote(input: {
   }
   await fs.writeFile(full, body, "utf8");
   const committed = await commitFile(rel, `curly-os: ${title}`);
-  const ingested = await ingestNote(rel, body);
   triggerReindex();
-  return { ok: true, rel, committed, ingested };
+  return { ok: true, rel, committed };
 }

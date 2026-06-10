@@ -7,7 +7,7 @@ import { useVoice } from "@/lib/voice/VoiceContext";
 import { useToast } from "@/components/ui/ToastProvider";
 import { streamChat } from "@/lib/use-chat-stream";
 import { Markdown } from "@/components/Markdown";
-import type { SearchResponse } from "@/app/api/search/route";
+import type { SearchResponse } from "@/app/api/vault-search/route";
 
 // The OS command bar. ⌘K (or the `curly-palette-open` event) summons it. Unlike
 // the old launcher, it EXECUTES: typed prefixes route to real actions —
@@ -116,7 +116,7 @@ export function CommandPalette() {
     const ctrl = new AbortController();
     const t = setTimeout(async () => {
       try {
-        const res = await fetch(`/api/search?q=${encodeURIComponent(term)}`, { signal: ctrl.signal });
+        const res = await fetch(`/api/vault-search?q=${encodeURIComponent(term)}`, { signal: ctrl.signal });
         if (res.ok) setResults((await res.json()) as SearchResponse);
       } catch {
         /* aborted or failed */
