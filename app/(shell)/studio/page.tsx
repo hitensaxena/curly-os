@@ -54,6 +54,12 @@ const EPISTEMIC_BORDER: Record<EpistemicStatus, string> = {
   hypothesis: "border-blue-400/30",
 };
 
+// seed → conjecture → hypothesis; hypothesis exits the studio via graduation
+const NEXT_STATUS: Partial<Record<EpistemicStatus, EpistemicStatus>> = {
+  seed: "conjecture",
+  conjecture: "hypothesis",
+};
+
 export default function StudioPage() {
   const [studios, setStudios] = useState<Studio[]>([]);
   const [total, setTotal] = useState(0);
@@ -72,6 +78,10 @@ export default function StudioPage() {
   const [sketchContent, setSketchContent] = useState("");
   const [sketchKind, setSketchKind] = useState("");
   const [addingSketch, setAddingSketch] = useState(false);
+
+  // Promote / graduate
+  const [busySketchId, setBusySketchId] = useState<string | null>(null);
+  const [sketchError, setSketchError] = useState("");
 
   const loadStudios = () => {
     setLoading(true);
@@ -155,6 +165,45 @@ export default function StudioPage() {
       // silently fail
     } finally {
       setAddingSketch(false);
+    }
+  };
+
+  const promoteSketch = async (sk: Sketch) => {
+    const next = NEXT_STATUS[sk.epistemic_status as EpistemicStatus];
+    if (!next || !selected) return;
+    setBusySketchId(sk.id);
+    setSketchError("");
+    try {
+      const r = await fetch(`${API}/api/studio/sketch/${sk.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ epistemic_status: next }),
+      });
+      if (!r.ok) throw new Error((await r.json()).detail ?? r.statusText);
+      selectStudio(selected);
+    } catch (e) {
+      setSketchError(e instanceof Error ? e.message : "Failed to promote.");
+    } finally {
+      setBusySketchId(null);
+    }
+  };
+
+  const graduateSketch = async (sk: Sketch) => {
+    if (!selected) return;
+    setBusySketchId(sk.id);
+    setSketchError("");
+    try {
+      const r = await fetch(`${API}/api/studio/sketch/${sk.id}/graduate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      if (!r.ok) throw new Error((await r.json()).detail ?? r.statusText);
+      selectStudio(selected);
+    } catch (e) {
+      setSketchError(e instanceof Error ? e.message : "Failed to graduate.");
+    } finally {
+      setBusySketchId(null);
     }
   };
 
@@ -320,6 +369,10 @@ export default function StudioPage() {
                   </button>
                 </div>
 
+                {sketchError && (
+                  <p className="mb-3 text-xs text-red-400">{sketchError}</p>
+                )}
+
                 {/* Epistemic ladder */}
                 {detail.sketches.length === 0 ? (
                   <p className="text-sm text-muted mb-4">No sketches yet — add the first one below.</p>
@@ -353,6 +406,43 @@ export default function StudioPage() {
                                   {sk.kind && (
                                     <span className="text-[10px] text-muted bg-surface border border-border rounded px-1.5 py-0.5 font-mono">
                                       {sk.kind}
+                                    </span>
+                                  )}
+                                  {typeof sk.properties?.graduated_to === "string" ? (
+                                    <a
+                                      href="/projects"
+                                      className="text-[10px] font-mono rounded border border-green-400/30 bg-green-400/10 text-green-400 px-1.5 py-0.5 hover:bg-green-400/20"
+                                      title={String(sk.properties.graduated_to)}
+                                    >
+                                      graduated ↗ {String(sk.properties.graduated_to).slice(0, 12)}
+                                    </a>
+                                  ) : (
+                                    <span className="ml-auto flex items-center gap-1.5">
+                                      {NEXT_STATUS[sk.epistemic_status as EpistemicStatus] && (
+                                        <button
+                                          onClick={() => promoteSketch(sk)}
+                                          disabled={busySketchId === sk.id}
+                                          className={`text-[10px] rounded border border-border px-1.5 py-0.5 text-muted hover:text-foreground hover:border-accent disabled:opacity-40 ${
+                                            EPISTEMIC_COLOR[NEXT_STATUS[sk.epistemic_status as EpistemicStatus]!]
+                                          }`}
+                                          title={`Promote to ${NEXT_STATUS[sk.epistemic_status as EpistemicStatus]}`}
+                                        >
+                                          {busySketchId === sk.id
+                                            ? "…"
+                                            : `↑ ${NEXT_STATUS[sk.epistemic_status as EpistemicStatus]}`}
+                                        </button>
+                                      )}
+                                      {(sk.epistemic_status === "conjecture" ||
+                                        sk.epistemic_status === "hypothesis") && (
+                                        <button
+                                          onClick={() => graduateSketch(sk)}
+                                          disabled={busySketchId === sk.id}
+                                          className="text-[10px] rounded border border-green-400/40 bg-green-400/5 px-1.5 py-0.5 text-green-400 hover:bg-green-400/15 disabled:opacity-40"
+                                          title="Graduate into a project — the only way out of the studio"
+                                        >
+                                          {busySketchId === sk.id ? "…" : "graduate ↗"}
+                                        </button>
+                                      )}
                                     </span>
                                   )}
                                 </div>

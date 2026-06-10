@@ -6,7 +6,9 @@ import { PageHeading } from "@/components/ui/PageHeading";
 import { useEventStream } from "@/lib/use-event-stream";
 import {
   cancelAgentRun,
+  denyApproval,
   getAgentRun,
+  grantApproval,
   resumeAgentRun,
 } from "@/lib/curlyos";
 import type {
@@ -207,6 +209,20 @@ export default function RunDetailPage({
     }
   };
 
+  const handleDecision = async (apvId: string, decision: "grant" | "deny") => {
+    setActionBusy(true);
+    setActionError("");
+    try {
+      if (decision === "grant") await grantApproval(apvId);
+      else await denyApproval(apvId, "denied from run view");
+      load();
+    } catch {
+      setActionError(`Failed to ${decision}.`);
+    } finally {
+      setActionBusy(false);
+    }
+  };
+
   const handleCancel = async () => {
     setActionBusy(true);
     setActionError("");
@@ -255,6 +271,11 @@ export default function RunDetailPage({
 
   const isActive = run.status === "running" || run.status === "parked";
   const done = run.finished_at !== null;
+  const pendingApprovals = run.approvals.filter((a) => a.state === "pending");
+  // Grant/deny resume the run themselves (one resume primitive); a bare
+  // Resume on a pending approval just re-parks. Only offer it as the
+  // recovery path when the run is parked with nothing left to decide.
+  const showResume = run.status === "parked" && pendingApprovals.length === 0;
 
   return (
     <div className="mx-auto w-full max-w-4xl px-5 py-8 sm:px-8">
@@ -276,7 +297,7 @@ export default function RunDetailPage({
         actions={
           <div className="flex items-center gap-2">
             <StatusChip status={run.status} />
-            {run.status === "parked" && (
+            {showResume && (
               <button
                 onClick={handleResume}
                 disabled={actionBusy}
@@ -300,6 +321,50 @@ export default function RunDetailPage({
 
       {actionError && (
         <p className="mb-4 text-xs text-red-400">{actionError}</p>
+      )}
+
+      {/* Pending approvals — the run is parked on these; deciding resumes it */}
+      {run.status === "parked" && pendingApprovals.length > 0 && (
+        <div className="mb-6 space-y-3">
+          {pendingApprovals.map((apv) => (
+            <div
+              key={apv.apv_id}
+              className="rounded-lg border border-yellow-400/30 bg-yellow-400/5 p-4"
+            >
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs font-semibold uppercase tracking-wide text-yellow-400">
+                  Approval required
+                </span>
+                <span className="text-xs font-mono text-muted">{apv.action_class}</span>
+                {apv.payload?.tool && (
+                  <span className="text-xs font-mono text-muted">· {apv.payload.tool}</span>
+                )}
+              </div>
+              {apv.payload?.why && (
+                <p className="mt-2 text-sm text-foreground">{apv.payload.why}</p>
+              )}
+              <div className="mt-3 flex items-center gap-2">
+                <button
+                  onClick={() => handleDecision(apv.apv_id, "grant")}
+                  disabled={actionBusy}
+                  className="rounded bg-green-500/90 px-3 py-1.5 text-sm text-white hover:bg-green-500 disabled:opacity-40"
+                >
+                  {actionBusy ? "..." : "Grant & resume"}
+                </button>
+                <button
+                  onClick={() => handleDecision(apv.apv_id, "deny")}
+                  disabled={actionBusy}
+                  className="rounded border border-red-400/40 px-3 py-1.5 text-sm text-red-400 hover:bg-red-400/10 disabled:opacity-40"
+                >
+                  {actionBusy ? "..." : "Deny & resume"}
+                </button>
+                <span className="text-[10px] text-muted font-mono">
+                  or reply &lsquo;approve {apv.apv_id}&rsquo; on Telegram
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
       )}
 
       {/* Summary / Error */}
