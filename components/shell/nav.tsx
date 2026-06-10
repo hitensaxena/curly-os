@@ -30,6 +30,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/studio", label: "Studio", Icon: StudioIcon },
       { href: "/simulation", label: "Simulation", Icon: SimulationIcon },
       { href: "/goals", label: "Goals", Icon: GoalsIcon },
+      { href: "/opportunities", label: "Opportunities", Icon: OpportunitiesIcon },
       { href: "/decisions", label: "Decisions", Icon: DecisionsIcon },
       { href: "/workspaces", label: "Workspaces", Icon: WorkspaceIcon },
       { href: "/projects", label: "Projects", Icon: FolderIcon },
@@ -260,6 +261,15 @@ export function DecisionsIcon(p: SVGProps<SVGSVGElement>) {
     <svg {...base} {...p}>
       <path d="M6 3v6l6 4 6-4V3" />
       <path d="M12 13v8" />
+    </svg>
+  );
+}
+// Opportunities — radar / spark signal.
+export function OpportunitiesIcon(p: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...base} {...p}>
+      <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
+      <circle cx="12" cy="12" r="3" />
     </svg>
   );
 }

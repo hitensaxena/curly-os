@@ -418,6 +418,90 @@ export interface ApprovalActionResult {
   resumed?: boolean;
 }
 
+// --- Simulation Runs (extended) ----------------------------------------------
+
+export interface SimScenarioOutcome {
+  scenarios: Record<string, number>;
+  implications: string;
+}
+
+export interface SimRunExtended {
+  id: string;
+  scope: string | null;
+  question: string;
+  world_model_id: string | null;
+  status: string;
+  epistemic_status: string;
+  outcome_distribution: SimScenarioOutcome | Record<string, number> | unknown[] | null;
+  parameters: Record<string, unknown> | null;
+  created_at: string;
+  completed_at: string | null;
+}
+
+export interface SimExecuteResult {
+  sim_id: string;
+  scenarios: number;
+  outcome: Record<string, number>;
+  implications: string;
+}
+
+// --- Opportunities -----------------------------------------------------------
+
+export type OpportunityStatus = "detected" | "scored" | "accepted" | "rejected" | "expired";
+
+export interface Opportunity {
+  id: string;
+  title: string;
+  description: string | null;
+  source: string | null;
+  evidence_refs: string[];
+  novelty: number | null;
+  value_est: number | null;
+  feasibility: number | null;
+  score: number | null;
+  status: OpportunityStatus;
+  resolution: string | null;
+  detected_at: string;
+  resolved_at: string | null;
+}
+
+export interface ResolveOpportunityBody {
+  accept: boolean;
+  resolution: string;
+}
+
+export interface ResolveOpportunityResult {
+  id: string;
+  status: OpportunityStatus;
+  resolution: string;
+}
+
+export interface DiscoveryScanResult {
+  proposed: number;
+  created: string[];
+  created_count: number;
+}
+
+// --- Decision Council --------------------------------------------------------
+
+export interface CouncilPerspective {
+  perspective: string;
+  view: string;
+}
+
+export interface CouncilResult {
+  dec_id: string;
+  perspectives: CouncilPerspective[];
+  synthesis: string;
+}
+
+// Extended Decision with optional council
+export interface DecisionWithCouncil extends Decision {
+  properties?: {
+    council?: CouncilResult;
+  };
+}
+
 // --- SSE Events --------------------------------------------------------------
 
 export interface SseEvent {

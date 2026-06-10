@@ -4,11 +4,14 @@ import type {
   AgentRun,
   AgentRunDetail,
   ApprovalActionResult,
+  CouncilResult,
   CreateDecisionBody,
   CreateGoalBody,
   CreateRunBody,
   CreateRunResult,
   Decision,
+  DecisionWithCouncil,
+  DiscoveryScanResult,
   EngineTriggerResult,
   EventItem,
   Goal,
@@ -17,8 +20,12 @@ import type {
   HealthStatus,
   LogResponse,
   LogSource,
+  Opportunity,
   PendingApproval,
+  ResolveOpportunityBody,
+  ResolveOpportunityResult,
   RunActionResult,
+  SimExecuteResult,
   Stats,
   SystemsStatus,
 } from "@/lib/curlyos-types";
@@ -150,6 +157,83 @@ export async function reviewDecision(
     },
   );
   return r.json() as Promise<Decision>;
+}
+
+export function getDecisionsWithCouncil(
+  dueForReview?: boolean,
+): Promise<{ items: DecisionWithCouncil[]; count: number }> {
+  const q =
+    dueForReview !== undefined
+      ? `?due_for_review=${dueForReview ? "true" : "false"}`
+      : "";
+  return getJSON<{ items: DecisionWithCouncil[]; count: number }>(`/api/decisions${q}`);
+}
+
+export async function runCouncil(id: string): Promise<CouncilResult> {
+  const r = await fetch(`/api/decisions/${encodeURIComponent(id)}/council`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+  });
+  if (!r.ok) {
+    const err = await r.json().catch(() => ({}));
+    const msg = (err as { detail?: string }).detail ?? `HTTP ${r.status}`;
+    throw Object.assign(new Error(msg), { status: r.status });
+  }
+  return r.json() as Promise<CouncilResult>;
+}
+
+// --- Opportunities -----------------------------------------------------------
+
+export function getOpportunities(
+  status?: string,
+): Promise<{ items: Opportunity[]; count: number }> {
+  const q = status ? `?status=${encodeURIComponent(status)}` : "";
+  return getJSON<{ items: Opportunity[]; count: number }>(`/api/opportunities${q}`);
+}
+
+export async function resolveOpportunity(
+  id: string,
+  body: ResolveOpportunityBody,
+): Promise<ResolveOpportunityResult> {
+  const r = await fetch(`/api/opportunities/${encodeURIComponent(id)}/resolve`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!r.ok) {
+    const err = await r.json().catch(() => ({}));
+    const msg = (err as { detail?: string }).detail ?? `HTTP ${r.status}`;
+    throw Object.assign(new Error(msg), { status: r.status });
+  }
+  return r.json() as Promise<ResolveOpportunityResult>;
+}
+
+export async function scanDiscovery(): Promise<DiscoveryScanResult> {
+  const r = await fetch("/api/discovery/scan", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+  });
+  if (!r.ok) {
+    const err = await r.json().catch(() => ({}));
+    const msg = (err as { detail?: string }).detail ?? `HTTP ${r.status}`;
+    throw Object.assign(new Error(msg), { status: r.status });
+  }
+  return r.json() as Promise<DiscoveryScanResult>;
+}
+
+// --- Simulation execute -------------------------------------------------------
+
+export async function executeSimRun(id: string): Promise<SimExecuteResult> {
+  const r = await fetch(`/api/simulation/runs/${encodeURIComponent(id)}/execute`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+  });
+  if (!r.ok) {
+    const err = await r.json().catch(() => ({}));
+    const msg = (err as { detail?: string }).detail ?? `HTTP ${r.status}`;
+    throw Object.assign(new Error(msg), { status: r.status });
+  }
+  return r.json() as Promise<SimExecuteResult>;
 }
 
 // --- Agent Runs --------------------------------------------------------------

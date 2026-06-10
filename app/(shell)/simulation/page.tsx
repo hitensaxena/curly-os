@@ -2,8 +2,15 @@
 
 import { useEffect, useState } from "react";
 import { PageHeading } from "@/components/ui/PageHeading";
+import { useToast } from "@/components/ui/ToastProvider";
+import { executeSimRun } from "@/lib/curlyos";
 
 const API = "";
+
+interface SimScenarioOutcome {
+  scenarios: Record<string, number>;
+  implications: string;
+}
 
 interface SimRun {
   id: string;
@@ -12,7 +19,7 @@ interface SimRun {
   world_model_id: string | null;
   status: string;
   epistemic_status: string;
-  outcome_distribution: Record<string, number> | unknown[] | null;
+  outcome_distribution: SimScenarioOutcome | Record<string, number> | unknown[] | null;
   parameters: Record<string, unknown> | null;
   created_at: string;
   completed_at: string | null;
@@ -41,6 +48,35 @@ function epistemicChip(es: string) {
   );
 }
 
+function ScenarioBars({ scenarios }: { scenarios: Record<string, number> }) {
+  const entries = Object.entries(scenarios);
+  if (entries.length === 0) {
+    return <p className="text-xs text-muted italic">No outcomes computed yet.</p>;
+  }
+  const total = entries.reduce((s, [, v]) => s + v, 0);
+  return (
+    <div className="space-y-2">
+      {entries.map(([label, value]) => {
+        const pct = total > 0 ? (value / total) * 100 : 0;
+        return (
+          <div key={label}>
+            <div className="flex items-center justify-between mb-0.5">
+              <span className="text-xs text-foreground font-mono">{label}</span>
+              <span className="text-xs text-muted">{pct.toFixed(1)}%</span>
+            </div>
+            <div className="h-2 rounded-full bg-surface-2 overflow-hidden">
+              <div
+                className="h-full rounded-full bg-accent"
+                style={{ width: `${pct}%` }}
+              />
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function OutcomeDistribution({
   distribution,
 }: {
@@ -52,38 +88,36 @@ function OutcomeDistribution({
     );
   }
 
-  // Object mapping label -> number
+  // New shape from /execute: {scenarios: {...}, implications: string}
+  if (
+    !Array.isArray(distribution) &&
+    typeof distribution === "object" &&
+    "scenarios" in distribution &&
+    typeof (distribution as SimScenarioOutcome).scenarios === "object"
+  ) {
+    const d = distribution as SimScenarioOutcome;
+    return (
+      <div className="space-y-3">
+        <ScenarioBars scenarios={d.scenarios} />
+        {d.implications && (
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-muted mb-1">
+              Implications
+            </p>
+            <p className="text-xs text-muted leading-relaxed">{d.implications}</p>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Flat object mapping label -> number
   if (
     !Array.isArray(distribution) &&
     typeof distribution === "object" &&
     Object.values(distribution).every((v) => typeof v === "number")
   ) {
-    const entries = Object.entries(distribution as Record<string, number>);
-    if (entries.length === 0) {
-      return <p className="text-xs text-muted italic">No outcomes computed yet.</p>;
-    }
-    const total = entries.reduce((s, [, v]) => s + v, 0);
-    return (
-      <div className="space-y-2">
-        {entries.map(([label, value]) => {
-          const pct = total > 0 ? (value / total) * 100 : 0;
-          return (
-            <div key={label}>
-              <div className="flex items-center justify-between mb-0.5">
-                <span className="text-xs text-foreground font-mono">{label}</span>
-                <span className="text-xs text-muted">{pct.toFixed(1)}%</span>
-              </div>
-              <div className="h-2 rounded-full bg-surface-2 overflow-hidden">
-                <div
-                  className="h-full rounded-full bg-accent"
-                  style={{ width: `${pct}%` }}
-                />
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    );
+    return <ScenarioBars scenarios={distribution as Record<string, number>} />;
   }
 
   // Array or unknown shape — pretty-print
@@ -95,12 +129,14 @@ function OutcomeDistribution({
 }
 
 export default function SimulationPage() {
+  const toast = useToast();
   const [runs, setRuns] = useState<SimRun[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const [selected, setSelected] = useState<SimRun | null>(null);
+  const [executingId, setExecutingId] = useState<string | null>(null);
 
   // Create form
   const [showForm, setShowForm] = useState(false);
@@ -182,6 +218,26 @@ export default function SimulationPage() {
       setSubmitError(err instanceof Error ? err.message : "Submit failed.");
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleExecute = async (runId: string) => {
+    setExecutingId(runId);
+    try {
+      await executeSimRun(runId);
+      toast.success("Simulation executed.");
+      loadRuns();
+    } catch (err: unknown) {
+      const status = (err as { status?: number }).status;
+      if (status === 409) {
+        toast.error("Already completed.");
+      } else if (status === 503) {
+        toast.error("LLM unavailable — try again shortly.");
+      } else {
+        toast.error((err instanceof Error ? err.message : null) ?? "Execute failed.");
+      }
+    } finally {
+      setExecutingId(null);
     }
   };
 
@@ -282,18 +338,35 @@ export default function SimulationPage() {
           <div className="lg:col-span-2">
             <div className="rounded-lg border border-border bg-surface divide-y divide-border">
               {runs.map((run) => (
-                <button
+                <div
                   key={run.id}
                   onClick={() => setSelected(run)}
-                  className={`w-full text-left px-4 py-3 hover:bg-surface-2 transition-colors ${
+                  className={`px-4 py-3 hover:bg-surface-2 transition-colors cursor-pointer ${
                     selected?.id === run.id
                       ? "bg-surface-2 border-l-2 border-accent"
                       : ""
                   }`}
                 >
-                  <p className="text-sm text-foreground line-clamp-2">
-                    {run.question?.slice(0, 200)}
-                  </p>
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="text-sm text-foreground line-clamp-2 flex-1">
+                      {run.question?.slice(0, 200)}
+                    </p>
+                    {run.status === "created" && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleExecute(run.id);
+                        }}
+                        disabled={executingId === run.id}
+                        className="shrink-0 rounded border border-accent/40 bg-accent/10 px-2 py-0.5 text-[10px] text-accent hover:bg-accent/20 disabled:opacity-40 flex items-center gap-1"
+                      >
+                        {executingId === run.id && (
+                          <span className="inline-block w-2.5 h-2.5 rounded-full border border-accent/40 border-t-accent animate-spin" />
+                        )}
+                        {executingId === run.id ? "Running..." : "Execute"}
+                      </button>
+                    )}
+                  </div>
                   <div className="flex items-center gap-2 mt-1.5 flex-wrap">
                     {statusChip(run.status)}
                     {run.epistemic_status && epistemicChip(run.epistemic_status)}
@@ -301,7 +374,7 @@ export default function SimulationPage() {
                       {new Date(run.created_at).toLocaleDateString()}
                     </span>
                   </div>
-                </button>
+                </div>
               ))}
             </div>
           </div>
