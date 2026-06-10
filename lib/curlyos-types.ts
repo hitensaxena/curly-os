@@ -511,3 +511,80 @@ export interface SseEvent {
   data: Record<string, unknown>;
   at: string;
 }
+
+// --- Evolution ---------------------------------------------------------------
+
+export type PromptVersionStatus = "candidate" | "active" | "held" | "retired";
+export type EvalDecision = "promote" | "hold";
+
+export interface PromptVersion {
+  id: string;
+  name: string;
+  version: number;
+  status: PromptVersionStatus;
+  proposed_by: string | null;
+  notes: string | null;
+  created_at: string;
+  activated_at: string | null;
+  pass_rate: number | null;
+  eval_decision: EvalDecision | null;
+  approval_id: string | null;
+}
+
+export type EvolutionEventType =
+  | "evolution.candidate.proposed"
+  | "evolution.eval.completed"
+  | "evolution.candidate.held"
+  | "evolution.prompt.activated";
+
+export interface EvolutionTimelineItem {
+  seq: number;
+  type: EvolutionEventType;
+  subject: string | null;
+  data: Record<string, unknown>;
+  at: string;
+}
+
+export interface EvalTaskDetail {
+  task: string;
+  pass: boolean;
+  why: string;
+}
+
+export interface EvalResult {
+  pmt_id: string;
+  evr_id: string;
+  pass_rate: number;
+  baseline: number;
+  verdict: "pass" | "held";
+  details: EvalTaskDetail[];
+}
+
+export interface ActivateResult {
+  pmt_id: string;
+  name: string;
+  version: number;
+  status: "active";
+  pdp_reason: string | null;
+}
+
+export interface ProposePromptBody {
+  name: string;
+  content: string;
+  notes?: string;
+}
+
+export interface ProposePromptResult {
+  id: string;
+  name: string;
+  version: number;
+  status: PromptVersionStatus;
+}
+
+export interface CreateApprovalResult {
+  apv_id: string;
+  action_class: string;
+  state: string;
+  payload: Record<string, unknown>;
+  created_at: string;
+}

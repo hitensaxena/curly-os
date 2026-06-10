@@ -22,6 +22,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/identity", label: "Identity", Icon: UserIcon },
       { href: "/graph", label: "Graph", Icon: GraphIcon },
       { href: "/cognition", label: "Cognition", Icon: CogIcon },
+      { href: "/evolution", label: "Evolution", Icon: EvolutionIcon },
     ],
   },
   {
@@ -299,6 +300,16 @@ export function ApprovalsIcon(p: SVGProps<SVGSVGElement>) {
     <svg {...base} {...p}>
       <path d="M12 3 4 6v6c0 4 3.6 7.7 8 9 4.4-1.3 8-5 8-9V6z" />
       <path d="M9 12l2 2 4-4" />
+    </svg>
+  );
+}
+// Evolution — a DNA double-helix / spiral suggesting self-modification.
+export function EvolutionIcon(p: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...base} {...p}>
+      <path d="M7 3c0 6 10 6 10 12S7 21 7 21" />
+      <path d="M17 3c0 6-10 6-10 12s10 6 10 6" />
+      <path d="M7 9h10M7 15h10" />
     </svg>
   );
 }

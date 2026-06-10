@@ -4,7 +4,9 @@ import type {
   AgentRun,
   AgentRunDetail,
   ApprovalActionResult,
+  ActivateResult,
   CouncilResult,
+  CreateApprovalResult,
   CreateDecisionBody,
   CreateGoalBody,
   CreateRunBody,
@@ -13,7 +15,9 @@ import type {
   DecisionWithCouncil,
   DiscoveryScanResult,
   EngineTriggerResult,
+  EvalResult,
   EventItem,
+  EvolutionTimelineItem,
   Goal,
   GoalDetail,
   GoalPatch,
@@ -22,6 +26,9 @@ import type {
   LogSource,
   Opportunity,
   PendingApproval,
+  ProposePromptBody,
+  ProposePromptResult,
+  PromptVersion,
   ResolveOpportunityBody,
   ResolveOpportunityResult,
   RunActionResult,
@@ -304,4 +311,94 @@ export async function denyApproval(
     body: JSON.stringify({ reason }),
   });
   return r.json() as Promise<ApprovalActionResult>;
+}
+
+// --- Evolution ---------------------------------------------------------------
+
+export function getEvolutionPrompts(): Promise<{
+  items: PromptVersion[];
+  count: number;
+}> {
+  return getJSON<{ items: PromptVersion[]; count: number }>(
+    "/api/evolution/prompts",
+  );
+}
+
+export function getEvolutionTimeline(
+  limit = 50,
+): Promise<{ items: EvolutionTimelineItem[] }> {
+  return getJSON<{ items: EvolutionTimelineItem[] }>(
+    `/api/evolution/timeline?limit=${limit}`,
+  );
+}
+
+export async function proposePromptVersion(
+  body: ProposePromptBody,
+): Promise<ProposePromptResult> {
+  const r = await fetch("/api/evolution/prompts", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!r.ok) {
+    const err = await r.json().catch(() => ({}));
+    const msg = (err as { detail?: string }).detail ?? `HTTP ${r.status}`;
+    throw Object.assign(new Error(msg), { status: r.status });
+  }
+  return r.json() as Promise<ProposePromptResult>;
+}
+
+export async function evaluatePrompt(id: string): Promise<EvalResult> {
+  const r = await fetch(
+    `/api/evolution/prompts/${encodeURIComponent(id)}/evaluate`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+    },
+  );
+  if (!r.ok) {
+    const err = await r.json().catch(() => ({}));
+    const msg = (err as { detail?: string }).detail ?? `HTTP ${r.status}`;
+    throw Object.assign(new Error(msg), { status: r.status });
+  }
+  return r.json() as Promise<EvalResult>;
+}
+
+export async function createSelfModifyApproval(
+  pmtId: string,
+): Promise<CreateApprovalResult> {
+  const r = await fetch("/api/approvals", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      action_class: "self_modify",
+      payload: { pmt_id: pmtId },
+    }),
+  });
+  if (!r.ok) {
+    const err = await r.json().catch(() => ({}));
+    const msg = (err as { detail?: string }).detail ?? `HTTP ${r.status}`;
+    throw Object.assign(new Error(msg), { status: r.status });
+  }
+  return r.json() as Promise<CreateApprovalResult>;
+}
+
+export async function activatePrompt(
+  id: string,
+  approvalId: string,
+): Promise<ActivateResult> {
+  const r = await fetch(
+    `/api/evolution/prompts/${encodeURIComponent(id)}/activate`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ approval_id: approvalId }),
+    },
+  );
+  if (!r.ok) {
+    const err = await r.json().catch(() => ({}));
+    const msg = (err as { detail?: string }).detail ?? `HTTP ${r.status}`;
+    throw Object.assign(new Error(msg), { status: r.status, detail: msg });
+  }
+  return r.json() as Promise<ActivateResult>;
 }
