@@ -256,15 +256,25 @@ export default function CognitionPage() {
             ) : <p className="text-sm text-muted">Nothing notable drifting.</p>}
           </section>
 
-          {/* Breadth & cognitive load */}
+          {/* Breadth — how scattered cognition is across domains */}
           <section>
-            <h2 className="text-sm font-semibold text-foreground mb-2">Breadth &amp; load</h2>
+            <h2 className="text-sm font-semibold text-foreground mb-1">Cognitive breadth</h2>
+            <p className="text-xs text-muted mb-3">
+              How widely your thinking spreads across kinds of things — and how much it concentrates in one.
+            </p>
             {attention?.breadth ? (
-              <div className="rounded-lg border border-border bg-surface px-4 py-3 mb-3 text-sm text-foreground">
-                {attention.breadth.distinct_types} entity types across {attention.breadth.total_entities} entities
-                <span className="text-muted"> · concentration {attention.breadth.concentration}</span>
-              </div>
-            ) : null}
+              <CognitiveBreadth breadth={attention.breadth} />
+            ) : (
+              <p className="text-sm text-muted">No graph entities to measure breadth.</p>
+            )}
+          </section>
+
+          {/* Cognitive load — recent mental tempo */}
+          <section>
+            <h2 className="text-sm font-semibold text-foreground mb-1">Cognitive load</h2>
+            <p className="text-xs text-muted mb-3">
+              Recent mental tempo — how densely packed and how scattered your last two weeks have been.
+            </p>
             {attention?.cognitive_load ? (
               <CognitiveLoad load={attention.cognitive_load} />
             ) : (
@@ -359,10 +369,127 @@ function fmtDate(d: string | null | undefined): string {
 
 // ── Attention dashboard pieces ───────────────────────────────────────────────
 
+// Entity-type palette — kept in sync with the knowledge-graph view so a type
+// reads the same colour everywhere.
+const TYPE_COLORS: Record<string, string> = {
+  Person: "#60a5fa",
+  Organization: "#22d3ee",
+  Project: "#f472b6",
+  Tool: "#a78bfa",
+  Skill: "#34d399",
+  Concept: "#fbbf24",
+  Place: "#fb923c",
+  Event: "#fb7185",
+  Health: "#f87171",
+  Media: "#2dd4bf",
+  Activity: "#a3e635",
+  Other: "#6b7280",
+};
+const typeColor = (label: string) => TYPE_COLORS[label] || "#6b7280";
+
 function band(v: number): { label: string; text: string; bar: string } {
   if (v >= 0.66) return { label: "high", text: "text-danger", bar: "bg-danger" };
   if (v >= 0.33) return { label: "moderate", text: "text-yellow-400", bar: "bg-yellow-400" };
   return { label: "low", text: "text-green-400", bar: "bg-green-400" };
+}
+
+function CognitiveBreadth({ breadth }: { breadth: any }) {
+  const total: number = breadth.total_entities ?? 0;
+  const distinct: number = breadth.distinct_types ?? 0;
+  const conc: number = typeof breadth.concentration === "number" ? breadth.concentration : 0;
+  const byType: Record<string, number> = breadth.by_type ?? {};
+  // by_type arrives ordered by count DESC, so the first entry is the dominant type.
+  const entries = Object.entries(byType) as [string, number][];
+  const dominant = entries[0]?.[0] ?? "—";
+  const TOP = 10;
+  const shown = entries.slice(0, TOP);
+  const rest = entries.slice(TOP);
+  const restCount = rest.reduce((s, [, c]) => s + c, 0);
+  const maxCount = entries.length ? entries[0][1] : 1;
+
+  const spread =
+    conc >= 0.5
+      ? { label: "concentrated", text: "text-yellow-400",
+          note: `over half of everything sits in ${dominant}` }
+      : conc >= 0.3
+      ? { label: "balanced", text: "text-green-400",
+          note: `a clear focus on ${dominant} with real breadth around it` }
+      : { label: "broad", text: "text-blue-400",
+          note: `attention is spread widely, no single type dominates` };
+
+  return (
+    <div className="space-y-3">
+      {/* Headline stats */}
+      <div className="grid grid-cols-3 gap-2">
+        <Stat value={distinct} label="distinct types" />
+        <Stat value={total} label="entities" />
+        <Stat value={`${Math.round(conc * 100)}%`} label={`in ${dominant}`} valueClass={spread.text} />
+      </div>
+
+      {/* Per-type distribution */}
+      <div className="rounded-lg border border-border bg-surface px-4 py-3">
+        <div className="space-y-2">
+          {shown.map(([label, count]) => {
+            const pct = total ? (count / total) * 100 : 0;
+            const w = maxCount ? (count / maxCount) * 100 : 0;
+            return (
+              <div key={label} className="flex items-center gap-3">
+                <span className="w-24 shrink-0 truncate text-xs text-foreground" title={label}>
+                  {label}
+                </span>
+                <div className="h-2 flex-1 overflow-hidden rounded-full bg-surface-2">
+                  <div className="h-full rounded-full"
+                    style={{ width: `${w}%`, backgroundColor: typeColor(label) }} />
+                </div>
+                <span className="w-16 shrink-0 text-right font-mono text-[10px] text-muted">
+                  {count} · {pct.toFixed(0)}%
+                </span>
+              </div>
+            );
+          })}
+          {rest.length > 0 && (
+            <div className="flex items-center gap-3 pt-1 text-[10px] text-muted">
+              <span className="w-24 shrink-0 truncate">+{rest.length} more</span>
+              <span className="flex-1" />
+              <span className="w-16 shrink-0 text-right font-mono">{restCount}</span>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <p className="text-xs text-muted">
+        Cognition spans <span className="text-foreground">{distinct}</span> kinds of things —{" "}
+        <span className={spread.text}>{spread.label}</span>: {spread.note}.
+      </p>
+    </div>
+  );
+}
+
+function Stat({ value, label, valueClass = "text-foreground" }:
+  { value: string | number; label: string; valueClass?: string }) {
+  return (
+    <div className="rounded-lg border border-border bg-surface px-3 py-2 text-center">
+      <div className={`text-lg font-semibold ${valueClass}`}>{value}</div>
+      <div className="text-[10px] text-muted">{label}</div>
+    </div>
+  );
+}
+
+function LoadComponent({ name, hint, value }: { name: string; hint: string; value: number }) {
+  const pct = Math.round(value * 100);
+  const b = band(value);
+  return (
+    <div>
+      <div className="flex items-baseline justify-between">
+        <span className="text-xs text-foreground">{name}</span>
+        <span className={`font-mono text-[10px] ${b.text}`}>{pct}%</span>
+      </div>
+      <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-surface-2">
+        <div className={`h-full rounded-full ${b.bar}`} style={{ width: `${pct}%` }} />
+      </div>
+      <p className="mt-1 text-[10px] text-muted">{hint}</p>
+    </div>
+  );
 }
 
 function CognitiveLoad({ load }: { load: any }) {
@@ -372,18 +499,32 @@ function CognitiveLoad({ load }: { load: any }) {
   const bk = load.breakdown ?? {};
   return (
     <div className="rounded-lg border border-border bg-surface px-4 py-3">
+      {/* Overall */}
       <div className="flex items-baseline justify-between">
-        <span className={`text-sm font-medium capitalize ${b.text}`}>{b.label}</span>
+        <span className={`text-sm font-medium capitalize ${b.text}`}>{b.label} load</span>
         <span className="font-mono text-xs text-muted">{pct}%</span>
       </div>
       <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-surface-2">
         <div className={`h-full rounded-full ${b.bar}`} style={{ width: `${pct}%` }} />
       </div>
-      <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[10px] text-muted">
-        {typeof bk.density === "number" && <span>density {bk.density.toFixed(2)}</span>}
-        {typeof bk.topic_switching === "number" && <span>topic switching {bk.topic_switching.toFixed(2)}</span>}
-        {typeof bk.episode_count === "number" && <span>{bk.episode_count} episodes</span>}
-        {typeof bk.window_days === "number" && <span>over {bk.window_days}d</span>}
+
+      {/* Components — what's driving the score */}
+      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+        {typeof bk.density === "number" && (
+          <LoadComponent name="Density" value={bk.density}
+            hint="how packed your days are — captures per day" />
+        )}
+        {typeof bk.topic_switching === "number" && (
+          <LoadComponent name="Topic switching" value={bk.topic_switching}
+            hint="how often focus jumps between unrelated topics" />
+        )}
+      </div>
+
+      {/* Provenance */}
+      <div className="mt-3 border-t border-border pt-2 text-[10px] text-muted">
+        score = 40% density + 60% topic switching
+        {typeof bk.episode_count === "number" && <> · {bk.episode_count} episodes</>}
+        {typeof bk.window_days === "number" && <> over {bk.window_days}d</>}
       </div>
     </div>
   );
