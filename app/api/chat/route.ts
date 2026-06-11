@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { CORE_URL } from "@/lib/core";
-import { CHAT_MODEL, OPENROUTER_URL, openrouterKey } from "@/lib/openrouter";
+import { CHAT_MODEL_CHAIN, OPENROUTER_URL, openrouterKey } from "@/lib/openrouter";
 import { ensureDataDir, getChat, recordTurn } from "@/lib/chats-db";
 import { searchVaultContent } from "@/lib/vault-fs";
 
@@ -158,25 +158,41 @@ export async function POST(request: Request) {
         }
 
         send("phase", { phase: "writing" });
-        const resp = await fetch(OPENROUTER_URL, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${key}`,
-            "HTTP-Referer": "https://os.curlybrackets.art",
-            "X-Title": "CurlyOS",
-          },
-          body: JSON.stringify({
-            model: CHAT_MODEL,
-            messages,
-            stream: true,
-            usage: { include: true },
-          }),
-          signal: upstream.signal,
-        });
-        if (!resp.ok || !resp.body) {
-          const t = await resp.text().catch(() => "");
-          send("error", { message: `openrouter ${resp.status}: ${t.slice(0, 200)}` });
+        // Failover across the model chain: a model that 429s/errors before the
+        // stream opens is skipped for the next. Once a stream opens we commit
+        // to that model (can't cleanly resume a half-streamed reply elsewhere).
+        let resp: Response | null = null;
+        let lastErr = "";
+        for (const model of CHAT_MODEL_CHAIN) {
+          if (upstream.signal.aborted) break;
+          try {
+            const r = await fetch(OPENROUTER_URL, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${key}`,
+                "HTTP-Referer": "https://os.curlybrackets.art",
+                "X-Title": "CurlyOS",
+              },
+              body: JSON.stringify({
+                model,
+                messages,
+                stream: true,
+                usage: { include: true },
+              }),
+              signal: upstream.signal,
+            });
+            if (r.ok && r.body) {
+              resp = r;
+              break;
+            }
+            lastErr = `openrouter ${r.status} on ${model}: ${(await r.text().catch(() => "")).slice(0, 150)}`;
+          } catch (e) {
+            lastErr = `${model}: ${e instanceof Error ? e.message : String(e)}`;
+          }
+        }
+        if (!resp || !resp.body) {
+          send("error", { message: lastErr || "all models failed" });
           return close();
         }
 

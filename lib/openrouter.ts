@@ -8,6 +8,17 @@ import path from "node:path";
 export const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 export const CHAT_MODEL = process.env.CURLYOS_CHAT_MODEL ?? "openrouter/owl-alpha";
 
+// Ordered failover chain (primary first, then backups). Mirrors curlyos-core's
+// CURLYOS_MODEL_CHAIN; on a 429/error from one model the chat route tries the
+// next (the :free backups rate-limit often).
+const DEFAULT_CHAIN =
+  "openrouter/owl-alpha,nex-agi/nex-n2-pro:free,nvidia/nemotron-3-ultra-550b-a55b:free";
+export const CHAT_MODEL_CHAIN: string[] = (() => {
+  const raw = process.env.CURLYOS_MODEL_CHAIN ?? DEFAULT_CHAIN;
+  const chain = raw.split(",").map((s) => s.trim()).filter(Boolean);
+  return [CHAT_MODEL, ...chain.filter((m) => m !== CHAT_MODEL)];
+})();
+
 let _key: string | null = null;
 
 export function openrouterKey(): string {
