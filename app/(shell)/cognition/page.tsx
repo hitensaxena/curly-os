@@ -127,6 +127,22 @@ export default function CognitionPage() {
             ) : <p className="text-sm text-muted">No assumptions yet.</p>}
           </section>
 
+          {/* Mental models */}
+          <section>
+            <h2 className="text-sm font-semibold text-foreground mb-2">Mental models</h2>
+            {meta?.mental_models?.length > 0 ? (
+              <div className="space-y-2">
+                {meta.mental_models.map((m: any) => (
+                  <div key={m.id} className="rounded-lg border border-border bg-surface px-4 py-3">
+                    <p className="text-sm font-medium text-foreground">{m.name}</p>
+                    <p className="text-sm text-muted mt-0.5">{m.description}</p>
+                    <span className="text-[10px] text-muted">{m.domain}</span>
+                  </div>
+                ))}
+              </div>
+            ) : <p className="text-sm text-muted">No mental models yet.</p>}
+          </section>
+
           {/* Decision Audits */}
           <section>
             <h2 className="text-sm font-semibold text-foreground mb-2">Decision Audits</h2>
@@ -184,31 +200,31 @@ export default function CognitionPage() {
       {/* Attention */}
       {tab === "attention" && (
         <div className="space-y-8">
-          {/* Cognitive load */}
+          {/* Focus areas — cognitive mass from the knowledge graph */}
           <section>
-            <h2 className="text-sm font-semibold text-foreground mb-2">Cognitive load</h2>
-            {attention?.cognitive_load ? (
-              <CognitiveLoad load={attention.cognitive_load} />
-            ) : (
-              <p className="text-sm text-muted">Not enough recent activity to estimate load.</p>
-            )}
+            <h2 className="text-sm font-semibold text-foreground mb-1">Focus areas</h2>
+            <p className="text-xs text-muted mb-3">
+              Where your cognitive mass sits — the most-connected entities in your knowledge graph.
+            </p>
+            {attention?.focus_areas?.length > 0 ? (
+              <div className="flex flex-wrap gap-2">
+                {attention.focus_areas.map((f: any) => (
+                  <span key={f.name} title={`${f.label} · ${f.weight} connections`}
+                    className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface px-3 py-1 text-sm text-foreground">
+                    {f.name}
+                    <span className="text-[10px] text-muted">{f.label}</span>
+                    <span className="text-[10px] text-accent">{f.weight}</span>
+                  </span>
+                ))}
+              </div>
+            ) : <p className="text-sm text-muted">No focus areas yet.</p>}
           </section>
 
-          {/* Attention allocation */}
-          <section>
-            <h2 className="text-sm font-semibold text-foreground mb-2">Where attention went</h2>
-            {attention?.allocation && Object.keys(attention.allocation.categories ?? {}).length > 0 ? (
-              <Allocation allocation={attention.allocation} />
-            ) : (
-              <p className="text-sm text-muted">No categorized activity in the window yet.</p>
-            )}
-          </section>
-
-          {/* Alignment gaps */}
+          {/* Alignment gaps — stated priorities getting little recent attention */}
           <section>
             <h2 className="text-sm font-semibold text-foreground mb-2">Alignment gaps</h2>
             <p className="text-xs text-muted mb-3">
-              Things you&apos;ve said you value or aim for, with no matching recent activity.
+              Goals &amp; values you&apos;ve stated that get little recent attention — said, but barely acted on.
             </p>
             {attention?.alignment_gaps?.length > 0 ? (
               <div className="space-y-2">
@@ -217,7 +233,42 @@ export default function CognitionPage() {
                 ))}
               </div>
             ) : (
-              <p className="text-sm text-muted">No alignment gaps detected — stated values track recent activity.</p>
+              <p className="text-sm text-muted">No alignment gaps — your stated priorities all get recent attention.</p>
+            )}
+          </section>
+
+          {/* Neglected — established entities drifting from attention */}
+          <section>
+            <h2 className="text-sm font-semibold text-foreground mb-1">Drifting from attention</h2>
+            <p className="text-xs text-muted mb-3">
+              Well-established people, projects &amp; ideas with no recent activity.
+            </p>
+            {attention?.neglected?.length > 0 ? (
+              <div className="flex flex-wrap gap-2">
+                {attention.neglected.map((n: any) => (
+                  <span key={n.name} title={`${n.label} · ${n.weight} connections`}
+                    className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/30 bg-amber-500/5 px-3 py-1 text-sm text-foreground">
+                    {n.name}
+                    <span className="text-[10px] text-muted">{n.label}</span>
+                  </span>
+                ))}
+              </div>
+            ) : <p className="text-sm text-muted">Nothing notable drifting.</p>}
+          </section>
+
+          {/* Breadth & cognitive load */}
+          <section>
+            <h2 className="text-sm font-semibold text-foreground mb-2">Breadth &amp; load</h2>
+            {attention?.breadth ? (
+              <div className="rounded-lg border border-border bg-surface px-4 py-3 mb-3 text-sm text-foreground">
+                {attention.breadth.distinct_types} entity types across {attention.breadth.total_entities} entities
+                <span className="text-muted"> · concentration {attention.breadth.concentration}</span>
+              </div>
+            ) : null}
+            {attention?.cognitive_load ? (
+              <CognitiveLoad load={attention.cognitive_load} />
+            ) : (
+              <p className="text-sm text-muted">Not enough recent activity to estimate load.</p>
             )}
           </section>
         </div>
@@ -338,48 +389,9 @@ function CognitiveLoad({ load }: { load: any }) {
   );
 }
 
-const TREND: Record<string, { glyph: string; color: string }> = {
-  increasing: { glyph: "↑", color: "text-green-400" },
-  decreasing: { glyph: "↓", color: "text-danger" },
-  stable: { glyph: "→", color: "text-muted" },
-};
-
-function Allocation({ allocation }: { allocation: any }) {
-  const cats = (Object.entries(allocation.categories ?? {}) as [string, any][]).sort(
-    (a, b) => (b[1].percentage ?? 0) - (a[1].percentage ?? 0),
-  );
-  const max = Math.max(1, ...cats.map(([, v]) => v.percentage ?? 0));
-  return (
-    <div className="rounded-lg border border-border bg-surface px-4 py-3">
-      <div className="space-y-2.5">
-        {cats.map(([name, v]) => {
-          const pct = v.percentage ?? 0;
-          const tr = TREND[v.trend] ?? TREND.stable;
-          return (
-            <div key={name}>
-              <div className="flex items-baseline justify-between text-xs">
-                <span className="capitalize text-foreground">{name}</span>
-                <span className="font-mono text-muted">
-                  {pct}% <span className="opacity-60">· {v.count}</span>{" "}
-                  <span className={tr.color}>{tr.glyph}</span>
-                </span>
-              </div>
-              <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-surface-2">
-                <div className="h-full rounded-full bg-accent" style={{ width: `${(pct / max) * 100}%` }} />
-              </div>
-            </div>
-          );
-        })}
-      </div>
-      <div className="mt-3 text-[10px] text-muted">
-        {allocation.total_episodes ?? 0} episodes · last {allocation.window_days ?? 7}d
-      </div>
-    </div>
-  );
-}
-
 const SIGNAL: Record<string, { label: string; cls: string }> = {
   value_action_gap: { label: "value–action gap", cls: "border-amber-800/40 bg-amber-900/20 text-amber-300" },
+  goal_action_gap: { label: "goal–action gap", cls: "border-amber-800/40 bg-amber-900/20 text-amber-300" },
   fulfillment: { label: "fulfillment", cls: "border-green-800/40 bg-green-900/20 text-green-300" },
   regret: { label: "regret", cls: "border-red-800/40 bg-red-900/20 text-red-300" },
 };
