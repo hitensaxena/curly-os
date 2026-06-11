@@ -46,10 +46,17 @@ interface Expansion {
 
 const LABEL_COLORS: Record<string, string> = {
   Person: "#60a5fa",
+  Organization: "#22d3ee",
   Project: "#f472b6",
+  Tool: "#a78bfa",
   Skill: "#34d399",
-  Entity: "#a78bfa",
   Concept: "#fbbf24",
+  Place: "#fb923c",
+  Event: "#fb7185",
+  Health: "#f87171",
+  Media: "#2dd4bf",
+  Activity: "#a3e635",
+  Other: "#6b7280",
 };
 
 const STATUS_TEXT: Record<string, string> = {
