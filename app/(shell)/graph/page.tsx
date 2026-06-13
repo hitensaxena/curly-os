@@ -114,7 +114,7 @@ export default function GraphPage() {
   const fgRef = useRef<any>(null);
 
   useEffect(() => {
-    fetch(`${API}/api/graph`)
+    fetch(`${API}/api/graph?limit=50000`)
       .then((r) => r.json())
       .then((d) => {
         setNodes(d.nodes || []);
