@@ -21,16 +21,49 @@ type Mode = "default" | "ask" | "search" | "capture" | "run";
 
 type NavItem = { id: string; label: string; hint: string; path: string };
 
+// Every destination is reachable from the palette (the menu only lists the 6
+// spaces). Spaces first, then every sub-surface, so ⌘K jumps anywhere directly.
 const NAV: NavItem[] = [
   { id: "home", label: "Home", hint: "/", path: "/" },
-  { id: "projects", label: "Projects", hint: "/projects", path: "/projects" },
-  { id: "journal", label: "Journal", hint: "/journal", path: "/journal" },
-  { id: "care", label: "Self-care", hint: "/care", path: "/care" },
-  { id: "search", label: "Search your mind", hint: "/search", path: "/search" },
-  { id: "notes", label: "Browse notes", hint: "/notes", path: "/notes" },
-  { id: "agent", label: "Agent command center", hint: "/agent", path: "/agent" },
+  // spaces (hubs)
+  { id: "talk", label: "Talk", hint: "/talk · converse", path: "/talk" },
+  { id: "work", label: "Work", hint: "/work · goals & agents", path: "/work" },
+  { id: "knowledge", label: "Knowledge", hint: "/knowledge · what Curly knows", path: "/knowledge" },
+  { id: "create", label: "Create", hint: "/create · make & explore", path: "/create" },
+  { id: "system", label: "System", hint: "/system · meta & health", path: "/system" },
+  // Talk
   { id: "chat", label: "New chat with Curly", hint: "/chat", path: "/chat" },
+  { id: "agent", label: "Agent command center", hint: "/agent", path: "/agent" },
   { id: "surface", label: "Voice surface", hint: "/surface", path: "/surface" },
+  // Work
+  { id: "goals", label: "Goals", hint: "/goals", path: "/goals" },
+  { id: "orchestrator", label: "Orchestrator", hint: "/orchestrator", path: "/orchestrator" },
+  { id: "jobs", label: "Jobs", hint: "/jobs", path: "/jobs" },
+  { id: "inbox", label: "Inbox", hint: "/inbox", path: "/inbox" },
+  { id: "runs", label: "Runs", hint: "/runs", path: "/runs" },
+  { id: "approvals", label: "Approvals", hint: "/approvals", path: "/approvals" },
+  { id: "opportunities", label: "Opportunities", hint: "/opportunities", path: "/opportunities" },
+  // Knowledge
+  { id: "memory", label: "Memory", hint: "/memory", path: "/memory" },
+  { id: "episodes", label: "Episodes", hint: "/episodes", path: "/episodes" },
+  { id: "graph", label: "Graph", hint: "/graph", path: "/graph" },
+  { id: "self", label: "Self", hint: "/self", path: "/self" },
+  { id: "identity", label: "Identity", hint: "/identity", path: "/identity" },
+  { id: "notes", label: "Browse notes", hint: "/notes", path: "/notes" },
+  { id: "journal", label: "Journal", hint: "/journal", path: "/journal" },
+  { id: "search", label: "Search your mind", hint: "/search", path: "/search" },
+  // Create
+  { id: "studio", label: "Studio", hint: "/studio", path: "/studio" },
+  { id: "simulation", label: "Simulation", hint: "/simulation", path: "/simulation" },
+  { id: "decisions", label: "Decisions", hint: "/decisions", path: "/decisions" },
+  { id: "projects", label: "Projects", hint: "/projects", path: "/projects" },
+  { id: "workspaces", label: "Workspaces", hint: "/workspaces", path: "/workspaces" },
+  // System
+  { id: "cognition", label: "Cognition", hint: "/cognition", path: "/cognition" },
+  { id: "evolution", label: "Evolution", hint: "/evolution", path: "/evolution" },
+  { id: "systems", label: "Systems", hint: "/systems", path: "/systems" },
+  { id: "logs", label: "Logs", hint: "/logs", path: "/logs" },
+  { id: "care", label: "Self-care", hint: "/care", path: "/care" },
 ];
 
 function parseQuery(raw: string): { mode: Mode; term: string } {

@@ -5,17 +5,23 @@ import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { Logo } from "@/components/Logo";
 import { getInboxUnreadCount } from "@/lib/curlyos";
-import { NAV_GROUPS, NAV_HOME, SearchIcon, type NavItem } from "./nav";
+import { ChevronIcon, NAV_HOME, SPACES, SearchIcon, spaceForPath, type NavItem } from "./nav";
 
-// Floating navigation — a top-left menu button that opens the workspace list
-// (the old rail/bar nav, now a popover) plus a "search / ask Curly" entry that
-// opens the command palette. The bar is gone; this + the floating orb are the
-// shell's only chrome, so content stays full-bleed.
+// Floating navigation — a top-left menu button that opens the SPACES list (Talk /
+// Work / Knowledge / Create / System). The menu shows the ~6 spaces, not a flat
+// wall of 28 destinations: each space header links to its hub page, and expands
+// to reveal its sub-surfaces. The space containing the current route is expanded
+// by default. This + the floating orb are the shell's only chrome.
 export function FloatingNav() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const [unread, setUnread] = useState(0);
+  const [expanded, setExpanded] = useState<string | null>(null);
   const ref = useRef<HTMLDivElement>(null);
+
+  // Expand the space that owns the current route whenever it changes.
+  const activeSpaceKey = spaceForPath(pathname)?.key ?? null;
+  useEffect(() => setExpanded(activeSpaceKey), [activeSpaceKey]);
 
   // Inbox unread badge — refresh on mount, when the menu opens, on navigation,
   // and whenever the inbox page signals a change.
@@ -85,22 +91,57 @@ export function FloatingNav() {
           </button>
           <div className="my-1 h-px bg-border" />
           <NavLink item={NAV_HOME} pathname={pathname} onNavigate={() => setOpen(false)} />
-          {NAV_GROUPS.map((group) => (
-            <div key={group.label} className="mt-1">
-              <div className="px-2.5 pb-0.5 pt-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted/60">
-                {group.label}
+          {SPACES.map((space) => {
+            const isOpen = expanded === space.key;
+            const owns = activeSpaceKey === space.key;
+            // unread surfaces on the Work space header (it owns the inbox)
+            const headerBadge = space.items.some((i) => i.href === "/inbox") ? unread : 0;
+            return (
+              <div key={space.key} className="mt-0.5">
+                <div className="flex items-stretch">
+                  <Link
+                    href={space.href}
+                    onClick={() => setOpen(false)}
+                    className={[
+                      "flex flex-1 items-center gap-3 rounded-md px-2.5 py-2 text-sm font-medium transition-colors",
+                      owns ? "text-foreground" : "text-muted hover:bg-surface-2 hover:text-foreground",
+                    ].join(" ")}
+                  >
+                    <space.Icon className={`h-4 w-4 shrink-0 ${owns ? "text-accent" : ""}`} />
+                    {space.label}
+                    {headerBadge > 0 && !isOpen && (
+                      <span className="ml-auto inline-flex min-w-5 items-center justify-center rounded-full bg-accent px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                        {headerBadge > 99 ? "99+" : headerBadge}
+                      </span>
+                    )}
+                  </Link>
+                  <button
+                    type="button"
+                    aria-label={isOpen ? `Collapse ${space.label}` : `Expand ${space.label}`}
+                    aria-expanded={isOpen}
+                    onClick={() => setExpanded(isOpen ? null : space.key)}
+                    className="flex w-8 items-center justify-center rounded-md text-muted/60 transition-colors hover:bg-surface-2 hover:text-foreground"
+                  >
+                    <ChevronIcon className={`h-3.5 w-3.5 transition-transform ${isOpen ? "" : "-rotate-90"}`} />
+                  </button>
+                </div>
+                {isOpen && (
+                  <div className="mb-1 ml-3 border-l border-border pl-1.5">
+                    {space.items.map((item) => (
+                      <NavLink
+                        key={item.href}
+                        item={item}
+                        pathname={pathname}
+                        badge={item.href === "/inbox" ? unread : 0}
+                        onNavigate={() => setOpen(false)}
+                        compact
+                      />
+                    ))}
+                  </div>
+                )}
               </div>
-              {group.items.map((item) => (
-                <NavLink
-                  key={item.href}
-                  item={item}
-                  pathname={pathname}
-                  badge={item.href === "/inbox" ? unread : 0}
-                  onNavigate={() => setOpen(false)}
-                />
-              ))}
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
@@ -112,11 +153,13 @@ function NavLink({
   pathname,
   badge = 0,
   onNavigate,
+  compact = false,
 }: {
   item: NavItem;
   pathname: string;
   badge?: number;
   onNavigate: () => void;
+  compact?: boolean;
 }) {
   const { href, label, Icon } = item;
   const active = href === "/" ? pathname === "/" : pathname.startsWith(href);
@@ -127,7 +170,8 @@ function NavLink({
       onClick={onNavigate}
       aria-current={active ? "page" : undefined}
       className={[
-        "flex items-center gap-3 rounded-md px-2.5 py-2 text-sm transition-colors",
+        "flex items-center gap-3 rounded-md px-2.5 transition-colors",
+        compact ? "py-1.5 text-[13px]" : "py-2 text-sm",
         active
           ? "border-l-2 border-accent bg-accent-soft text-foreground"
           : "text-muted hover:bg-surface-2 hover:text-foreground",

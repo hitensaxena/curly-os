@@ -1,77 +1,119 @@
 import type { SVGProps } from "react";
 
-// Shared OS navigation model — consumed by the Spaces menu in the Curly bar.
+// Shared OS navigation model — consumed by the Spaces menu + the space hubs.
 export type NavItem = {
   href: string;
   label: string;
   Icon: (p: SVGProps<SVGSVGElement>) => React.ReactElement;
+  blurb?: string;        // one-line description, shown on the space hub cards
 };
 
+// A SPACE is a task-oriented area of the OS. The menu shows the ~6 spaces (not a
+// flat wall of 28 destinations); each space has a landing HUB page (`href`) whose
+// cards link to its sub-surfaces (`items`). Organize by what you're DOING —
+// Talk / Work / Knowledge / Create / System — not by internal subsystem.
+export type Space = {
+  key: string;
+  label: string;
+  href: string;
+  blurb: string;
+  Icon: (p: SVGProps<SVGSVGElement>) => React.ReactElement;
+  items: NavItem[];
+};
+
+// Back-compat alias for the old grouped shape.
 export type NavGroup = { label: string; items: NavItem[] };
 
-// Home stands alone at the top; everything else is grouped so the menu reads as
-// sections (Mind / Make / Capture / Converse / System) rather than a flat wall.
 export const NAV_HOME: NavItem = { href: "/", label: "Home", Icon: HomeIcon };
 
-export const NAV_GROUPS: NavGroup[] = [
+export const SPACES: Space[] = [
   {
-    label: "Mind",
+    key: "talk",
+    label: "Talk",
+    href: "/talk",
+    blurb: "Converse with Curly — type, run an agent, or talk out loud.",
+    Icon: ChatIcon,
     items: [
-      { href: "/self", label: "Self", Icon: SelfIcon },
-      { href: "/memory", label: "Memory", Icon: BrainIcon },
-      { href: "/identity", label: "Identity", Icon: UserIcon },
-      { href: "/graph", label: "Graph", Icon: GraphIcon },
-      { href: "/cognition", label: "Cognition", Icon: CogIcon },
-      { href: "/evolution", label: "Evolution", Icon: EvolutionIcon },
+      { href: "/chat", label: "Chat", Icon: ChatIcon, blurb: "Conversational chat with Curly." },
+      { href: "/agent", label: "Agent", Icon: BoltIcon, blurb: "Command center for one-off agent tasks." },
+      { href: "/surface", label: "Voice", Icon: OrbIcon, blurb: "Full-screen voice surface — tap the orb and talk." },
     ],
   },
   {
-    label: "Make",
+    key: "work",
+    label: "Work",
+    href: "/work",
+    blurb: "Intent → plan → execute → verify. Your goals and the agents working them.",
+    Icon: BoltIcon,
     items: [
-      { href: "/studio", label: "Studio", Icon: StudioIcon },
-      { href: "/simulation", label: "Simulation", Icon: SimulationIcon },
-      { href: "/goals", label: "Goals", Icon: GoalsIcon },
-      { href: "/orchestrator", label: "Orchestrator", Icon: OrchestratorIcon },
-      { href: "/opportunities", label: "Opportunities", Icon: OpportunitiesIcon },
-      { href: "/decisions", label: "Decisions", Icon: DecisionsIcon },
-      { href: "/workspaces", label: "Workspaces", Icon: WorkspaceIcon },
-      { href: "/projects", label: "Projects", Icon: FolderIcon },
+      { href: "/goals", label: "Goals", Icon: GoalsIcon, blurb: "What you're trying to achieve, with progress." },
+      { href: "/orchestrator", label: "Orchestrator", Icon: OrchestratorIcon, blurb: "Plans, worker agents, and the feedback loop." },
+      { href: "/jobs", label: "Jobs", Icon: JobsIcon, blurb: "Scheduled, recurring autonomous work." },
+      { href: "/inbox", label: "Inbox", Icon: InboxIcon, blurb: "Deliveries, plans to approve, goal results." },
+      { href: "/runs", label: "Runs", Icon: RunsIcon, blurb: "Live and past agent run traces." },
+      { href: "/approvals", label: "Approvals", Icon: ApprovalsIcon, blurb: "Actions waiting on your go-ahead." },
+      { href: "/opportunities", label: "Opportunities", Icon: OpportunitiesIcon, blurb: "Proactive suggestions Curly surfaces." },
     ],
   },
   {
-    label: "Capture",
+    key: "knowledge",
+    label: "Knowledge",
+    href: "/knowledge",
+    blurb: "Everything the OS knows about you — memory, graph, notes, and your self-model.",
+    Icon: BrainIcon,
     items: [
-      { href: "/journal", label: "Journal", Icon: JournalIcon },
-      { href: "/notes", label: "Notes", Icon: NotesIcon },
-      { href: "/care", label: "Care", Icon: HeartIcon },
+      { href: "/memory", label: "Memory", Icon: BrainIcon, blurb: "Facts and insights Curly remembers." },
+      { href: "/episodes", label: "Episodes", Icon: LayersIcon, blurb: "The raw event log behind memory." },
+      { href: "/graph", label: "Graph", Icon: GraphIcon, blurb: "Entities and how they relate." },
+      { href: "/self", label: "Self", Icon: SelfIcon, blurb: "Who you are right now, synthesized." },
+      { href: "/identity", label: "Identity", Icon: UserIcon, blurb: "The identity facts behind the self-model." },
+      { href: "/notes", label: "Notes", Icon: NotesIcon, blurb: "Your notes vault." },
+      { href: "/journal", label: "Journal", Icon: JournalIcon, blurb: "Daily journal entries." },
     ],
   },
   {
-    label: "Converse",
+    key: "create",
+    label: "Create",
+    href: "/create",
+    blurb: "Make and explore — sketches, what-ifs, decisions, and projects.",
+    Icon: StudioIcon,
     items: [
-      { href: "/chat", label: "Chat", Icon: ChatIcon },
-      { href: "/agent", label: "Agent", Icon: BoltIcon },
-      { href: "/surface", label: "Surface", Icon: OrbIcon },
-      { href: "/jobs", label: "Jobs", Icon: JobsIcon },
-      { href: "/inbox", label: "Inbox", Icon: InboxIcon },
-      { href: "/runs", label: "Runs", Icon: RunsIcon },
-      { href: "/approvals", label: "Approvals", Icon: ApprovalsIcon },
+      { href: "/studio", label: "Studio", Icon: StudioIcon, blurb: "Idea canvas and sketches." },
+      { href: "/simulation", label: "Simulation", Icon: SimulationIcon, blurb: "Explore possible outcomes before acting." },
+      { href: "/decisions", label: "Decisions", Icon: DecisionsIcon, blurb: "The decision registry and reviews." },
+      { href: "/projects", label: "Projects", Icon: FolderIcon, blurb: "Your registered projects." },
+      { href: "/workspaces", label: "Workspaces", Icon: WorkspaceIcon, blurb: "Project workspaces." },
     ],
   },
   {
+    key: "system",
     label: "System",
+    href: "/system",
+    blurb: "The meta layer — how Curly thinks, evolves, and stays healthy.",
+    Icon: PulseIcon,
     items: [
-      { href: "/search", label: "Search", Icon: SearchIcon },
-      { href: "/episodes", label: "Episodes", Icon: LayersIcon },
-      { href: "/logs", label: "Logs", Icon: TerminalIcon },
-      { href: "/systems", label: "Systems", Icon: PulseIcon },
+      { href: "/cognition", label: "Cognition", Icon: CogIcon, blurb: "The cognitive machinery and pipelines." },
+      { href: "/evolution", label: "Evolution", Icon: EvolutionIcon, blurb: "Prompt versions and self-modification." },
+      { href: "/systems", label: "Systems", Icon: PulseIcon, blurb: "Service health and status." },
+      { href: "/logs", label: "Logs", Icon: TerminalIcon, blurb: "System and event logs." },
+      { href: "/care", label: "Care", Icon: HeartIcon, blurb: "A quiet check on how you're doing." },
     ],
   },
 ];
 
-// Flat list (Home + every grouped item) — kept for any consumer that wants the
-// ungrouped set.
-export const NAV: NavItem[] = [NAV_HOME, ...NAV_GROUPS.flatMap((g) => g.items)];
+// Back-compat: the old grouped shape, derived from SPACES.
+export const NAV_GROUPS: NavGroup[] = SPACES.map((s) => ({ label: s.label, items: s.items }));
+
+// Flat list (Home + every space item) — for the command palette and any consumer
+// that wants the ungrouped set.
+export const NAV: NavItem[] = [NAV_HOME, ...SPACES.flatMap((s) => s.items)];
+
+export function spaceForPath(pathname: string): Space | undefined {
+  return SPACES.find(
+    (s) => pathname === s.href || pathname.startsWith(s.href + "/") ||
+      s.items.some((i) => pathname === i.href || pathname.startsWith(i.href + "/")),
+  );
+}
 
 const base = {
   fill: "none",

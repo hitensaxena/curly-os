@@ -654,8 +654,15 @@ export interface InboxItem {
 export type GoalPlanStatus =
   | "proposed" | "approved" | "executing" | "done" | "abandoned";
 export type GoalTaskStatus =
-  | "pending" | "dispatched" | "running" | "parked"
+  | "pending" | "dispatched" | "running" | "parked" | "verifying"
   | "completed" | "failed" | "skipped";
+
+export interface GoalTaskVerdict {
+  passed: boolean;
+  critique?: string;
+  evidence?: string;
+  at?: string;
+}
 
 export interface GoalTask {
   id: string;
@@ -666,6 +673,10 @@ export interface GoalTask {
   status: GoalTaskStatus;
   run_id: string | null;
   result_summary: string | null;
+  attempt: number;
+  max_attempts: number;
+  verify: string | null;
+  verdict: GoalTaskVerdict | null;
   updated_at: string | null;
 }
 

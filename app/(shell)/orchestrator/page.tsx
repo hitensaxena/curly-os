@@ -55,17 +55,34 @@ const TASK_CHIP: Record<GoalTaskStatus, string> = {
   dispatched: "text-accent bg-accent/10 border-accent/30",
   running: "text-accent bg-accent/10 border-accent/30",
   parked: "text-yellow-400 bg-yellow-400/10 border-yellow-400/30",
+  verifying: "text-sky-400 bg-sky-400/10 border-sky-400/30",
   completed: "text-green-400 bg-green-400/10 border-green-400/30",
   failed: "text-red-400 bg-red-400/10 border-red-400/30",
   skipped: "text-muted bg-surface-2 border-border",
 };
 
+const TASK_LABEL: Partial<Record<GoalTaskStatus, string>> = {
+  parked: "needs approval",
+  verifying: "verifying",
+  completed: "verified ✓",
+};
+
 function TaskChip({ status }: { status: GoalTaskStatus }) {
-  const label = status === "parked" ? "needs approval" : status;
+  const label = TASK_LABEL[status] ?? status;
   return (
     <span className={`inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] font-mono ${TASK_CHIP[status]}`}>
-      {status === "running" && <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent" />}
+      {(status === "running" || status === "verifying") && <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-current" />}
       {label}
+    </span>
+  );
+}
+
+// A small "attempt 2/3" pill — only shown once a task has been retried.
+function AttemptPill({ attempt, max }: { attempt: number; max: number }) {
+  if (!attempt) return null;
+  return (
+    <span className="inline-flex items-center rounded border border-orange-400/30 bg-orange-400/10 px-1.5 py-0.5 text-[10px] font-mono text-orange-400">
+      ⟳ attempt {attempt + 1}/{max + 1}
     </span>
   );
 }
@@ -520,19 +537,39 @@ function PlanTab({ plan, onChanged }: { plan: GoalPlan | null; onChanged: () => 
 function TaskRow({ task, planStatus, onChanged }: { task: GoalTask; planStatus: string; onChanged: () => void }) {
   const [busy, setBusy] = useState(false);
   const [open, setOpen] = useState(false);
-  const live = task.status === "running" || task.status === "parked";
+  const live = task.status === "running" || task.status === "parked" || task.status === "verifying";
   const canDispatch = task.status === "pending" && (planStatus === "approved" || planStatus === "executing");
+  const verdict = task.verdict;
+  const failedVerify = verdict && !verdict.passed;
 
   return (
     <div className="rounded border border-border bg-surface-2/30 p-3">
       <div className="flex items-start gap-2">
         <span className="mt-0.5 w-5 shrink-0 text-right font-mono text-[10px] text-muted">{task.seq + 1}</span>
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <span className="text-xs font-medium text-foreground">{task.title}</span>
             <TaskChip status={task.status} />
+            <AttemptPill attempt={task.attempt} max={task.max_attempts} />
           </div>
           <p className="mt-0.5 text-xs text-muted">{task.task}</p>
+          {task.verify && (
+            <p className="mt-1 text-[11px] text-muted">
+              <span className="font-mono text-[10px] uppercase tracking-wide text-muted/70">check </span>
+              {task.verify}
+            </p>
+          )}
+          {/* The verifier's critique — why it passed or what the retry must fix. */}
+          {verdict && (
+            <p className={`mt-1 rounded border px-2 py-1 text-[11px] ${
+              verdict.passed
+                ? "border-green-400/20 bg-green-400/5 text-green-400/90"
+                : "border-orange-400/25 bg-orange-400/5 text-orange-400/90"
+            }`}>
+              {verdict.passed ? "✓ verified: " : (task.status === "failed" ? "✗ gave up: " : "↻ retrying: ")}
+              {verdict.critique || (verdict.passed ? "meets the success criteria" : "did not meet the success criteria")}
+            </p>
+          )}
           {(live || open) && task.run_id && (
             <div className="mt-2 rounded border border-border bg-surface/60 p-2">
               <JobActivity runId={task.run_id} onTerminal={() => onChanged()} />
