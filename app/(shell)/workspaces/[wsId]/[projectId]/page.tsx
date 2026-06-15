@@ -4,6 +4,7 @@ import { use, useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { PageHeading } from "@/components/ui/PageHeading";
 import { ArtifactList } from "@/components/hierarchy/ArtifactList";
+import { ProjectChat } from "@/components/hierarchy/ProjectChat";
 import { getProjectDetail } from "@/lib/curlyos";
 import { useEventStream } from "@/lib/use-event-stream";
 import type { ProjectDetail, ProjectGoal } from "@/lib/curlyos-types";
@@ -27,10 +28,10 @@ const GOAL_STATUS: Record<string, string> = {
   abandoned: "text-muted border-border bg-surface-2",
 };
 
-function GoalRow({ goal, isNorthStar }: { goal: ProjectGoal; isNorthStar: boolean }) {
+function GoalRow({ goal, isNorthStar, basePath }: { goal: ProjectGoal; isNorthStar: boolean; basePath: string }) {
   return (
     <Link
-      href={`/orchestrator?goal=${encodeURIComponent(goal.id)}`}
+      href={`${basePath}/${encodeURIComponent(goal.id)}`}
       className="group block rounded-lg border border-border bg-surface p-3 transition-colors hover:border-accent"
     >
       <div className="flex items-start justify-between gap-3">
@@ -83,6 +84,9 @@ export default function ProjectOverviewPage({
   const goals = data?.goals ?? [];
   const artifacts = data?.artifacts ?? [];
   const northStarId = project?.north_star_goal_id ?? null;
+  const basePath = `/workspaces/${wsId}/${projectId}`;
+  // The project chat anchors on the north-star goal, else the first goal.
+  const anchorGoalId = northStarId ?? goals[0]?.id ?? null;
 
   return (
     <div className="mx-auto w-full max-w-5xl px-5 py-8 sm:px-8">
@@ -112,8 +116,12 @@ export default function ProjectOverviewPage({
             <p className="mb-6 -mt-2 font-mono text-[11px] text-muted">{project.path}</p>
           )}
 
-          <div className="grid gap-8 lg:grid-cols-[1fr_1.1fr]">
-            {/* Goals */}
+          {/* Chat (left) + Goals (right) */}
+          <div className="grid gap-8 lg:grid-cols-[1.1fr_1fr]">
+            <section>
+              <ProjectChat anchorGoalId={anchorGoalId} />
+            </section>
+
             <section>
               <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted">
                 Goals ({goals.length})
@@ -129,26 +137,26 @@ export default function ProjectOverviewPage({
               ) : (
                 <div className="space-y-2.5">
                   {goals.map((g) => (
-                    <GoalRow key={g.id} goal={g} isNorthStar={g.id === northStarId} />
+                    <GoalRow key={g.id} goal={g} isNorthStar={g.id === northStarId} basePath={basePath} />
                   ))}
                 </div>
               )}
             </section>
-
-            {/* Studio — tangible deliverables */}
-            <section>
-              <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted">
-                Studio · deliverables ({artifacts.length})
-              </h3>
-              {loading ? (
-                <div className="grid gap-2.5 sm:grid-cols-2">
-                  {[0, 1].map((i) => <div key={i} className="h-20 animate-pulse rounded-lg border border-border bg-surface" />)}
-                </div>
-              ) : (
-                <ArtifactList artifacts={artifacts} />
-              )}
-            </section>
           </div>
+
+          {/* Studio — tangible deliverables across the project */}
+          <section className="mt-8">
+            <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted">
+              Studio · deliverables ({artifacts.length})
+            </h3>
+            {loading ? (
+              <div className="grid gap-2.5 sm:grid-cols-2">
+                {[0, 1].map((i) => <div key={i} className="h-20 animate-pulse rounded-lg border border-border bg-surface" />)}
+              </div>
+            ) : (
+              <ArtifactList artifacts={artifacts} />
+            )}
+          </section>
         </>
       )}
     </div>
