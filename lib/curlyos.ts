@@ -45,6 +45,10 @@ import type {
   OrchestratorChatResult,
   DecomposeResult,
   GoalArtifact,
+  Workspace,
+  WorkspaceDetail,
+  ProjectDetail,
+  Artifact,
 } from "@/lib/curlyos-types";
 
 async function getJSON<T>(path: string): Promise<T> {
@@ -583,6 +587,40 @@ export function getGoalArtifacts(
 ): Promise<{ items: GoalArtifact[]; count: number }> {
   return getJSON<{ items: GoalArtifact[]; count: number }>(
     `/api/goals/${encodeURIComponent(goalId)}/artifacts`,
+  );
+}
+
+// ── Hierarchy: workspace → project → goal/artifacts ───────────────────────────
+
+export function getWorkspaces(): Promise<{ items: Workspace[]; count: number }> {
+  return getJSON<{ items: Workspace[]; count: number }>("/api/workspaces");
+}
+
+export function getWorkspaceDetail(workspaceId: string): Promise<WorkspaceDetail> {
+  return getJSON<WorkspaceDetail>(
+    `/api/workspaces/${encodeURIComponent(workspaceId)}`,
+  );
+}
+
+// Singular `/api/project/{id}` — NOT `/api/projects/` — because the webapp's
+// own `/api/projects/[slug]` route (the separate code-registry project concept)
+// shadows the core proxy for that path.
+export function getProjectDetail(projectId: string): Promise<ProjectDetail> {
+  return getJSON<ProjectDetail>(
+    `/api/project/${encodeURIComponent(projectId)}`,
+  );
+}
+
+// Tangible deliverables (new artifacts table), optionally scoped to a goal/project.
+export function getArtifacts(
+  opts: { projectId?: string; goalId?: string } = {},
+): Promise<{ items: Artifact[]; count: number }> {
+  const q = new URLSearchParams();
+  if (opts.projectId) q.set("project_id", opts.projectId);
+  if (opts.goalId) q.set("goal_id", opts.goalId);
+  const qs = q.toString();
+  return getJSON<{ items: Artifact[]; count: number }>(
+    `/api/artifacts${qs ? `?${qs}` : ""}`,
   );
 }
 

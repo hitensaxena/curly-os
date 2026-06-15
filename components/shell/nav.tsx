@@ -47,6 +47,7 @@ export const SPACES: Space[] = [
     Icon: BoltIcon,
     items: [
       { href: "/goals", label: "Goals", Icon: GoalsIcon, blurb: "What you're trying to achieve, with progress." },
+      { href: "/workspaces", label: "Workspaces", Icon: WorkspaceIcon, blurb: "Workspaces → projects → goals, and the files agents make." },
       { href: "/orchestrator", label: "Orchestrator", Icon: OrchestratorIcon, blurb: "Plans, worker agents, and the feedback loop." },
       { href: "/jobs", label: "Jobs", Icon: JobsIcon, blurb: "Scheduled, recurring autonomous work." },
       { href: "/inbox", label: "Inbox", Icon: InboxIcon, blurb: "Deliveries, plans to approve, goal results." },
@@ -81,8 +82,7 @@ export const SPACES: Space[] = [
       { href: "/studio", label: "Studio", Icon: StudioIcon, blurb: "Idea canvas and sketches." },
       { href: "/simulation", label: "Simulation", Icon: SimulationIcon, blurb: "Explore possible outcomes before acting." },
       { href: "/decisions", label: "Decisions", Icon: DecisionsIcon, blurb: "The decision registry and reviews." },
-      { href: "/projects", label: "Projects", Icon: FolderIcon, blurb: "Your registered projects." },
-      { href: "/workspaces", label: "Workspaces", Icon: WorkspaceIcon, blurb: "Project workspaces." },
+      { href: "/projects", label: "Projects", Icon: FolderIcon, blurb: "Your registered code projects." },
     ],
   },
   {

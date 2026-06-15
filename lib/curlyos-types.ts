@@ -744,3 +744,73 @@ export interface GoalArtifact {
   run_id: string | null;
   created_at: string | null;
 }
+
+// ── Hierarchy: workspace → project → goal/artifacts (Phase 1 backend) ──────────
+
+export interface Workspace {
+  id: string;
+  scope: string | null;
+  name: string;
+  slug: string | null;
+  path: string | null;
+  summary: string | null;
+  kind: string | null;
+  status: string | null;
+  created_at: string;
+  updated_at: string;
+  project_count: number;
+}
+
+export interface Project {
+  id: string;
+  workspace_id: string;
+  scope: string | null;
+  name: string;
+  slug: string | null;
+  path: string | null;
+  summary: string | null;
+  north_star_goal_id: string | null;
+  status: string;
+  created_at: string;
+  goal_count: number;
+  artifact_count: number;
+}
+
+// A tangible deliverable an agent produced (the new `artifacts` table).
+export interface Artifact {
+  id: string;
+  scope: string;
+  project_id: string | null;
+  goal_id: string | null;
+  run_id: string | null;
+  task_id: string | null;
+  kind: string; // file | doc | pdf | image | code | deploy | link | data
+  title: string;
+  path: string | null;
+  url: string | null;
+  bytes: number | null;
+  status: string; // created | updated | published | archived
+  summary: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+export interface ProjectGoal {
+  id: string;
+  title: string;
+  status: string;
+  progress: number;
+  horizon: string | null;
+  success_criteria: string | null;
+}
+
+export interface WorkspaceDetail {
+  workspace: Workspace;
+  projects: Project[];
+}
+
+export interface ProjectDetail {
+  project: Project & { workspace_name: string; workspace_slug: string };
+  goals: ProjectGoal[];
+  artifacts: Artifact[];
+}

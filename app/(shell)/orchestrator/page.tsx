@@ -10,6 +10,7 @@ import {
   getOrchestratorOverview,
   getGoalPlan,
   getGoalArtifacts,
+  getArtifacts,
   decomposeGoal,
   approvePlan,
   dispatchTask,
@@ -28,13 +29,15 @@ import type {
   GoalTask,
   GoalTaskStatus,
   GoalArtifact,
+  Artifact,
   OrchestratorOverview,
   OrchestratorGoal,
   OrchestratorMessage,
   SseEvent,
 } from "@/lib/curlyos-types";
+import { ArtifactList } from "@/components/hierarchy/ArtifactList";
 
-type Tab = "conversation" | "plan" | "artifacts";
+type Tab = "conversation" | "plan" | "artifacts" | "studio";
 
 // ── small shared bits ───────────────────────────────────────────────────────
 
@@ -123,7 +126,15 @@ export default function OrchestratorPage() {
     getGoals("active").then((d) => setGoals(d.items)).catch(() => {});
   }, [loadOverview]);
 
-  // auto-select the first orchestrated goal
+  // Deep-link: /orchestrator?goal=<id> (e.g. arriving from a project's studio)
+  // selects that goal directly. Read once on mount to avoid the Suspense
+  // requirement of useSearchParams.
+  useEffect(() => {
+    const g = new URLSearchParams(window.location.search).get("goal");
+    if (g) setSelectedId(g);
+  }, []);
+
+  // auto-select the first orchestrated goal (unless a deep-link already chose one)
   useEffect(() => {
     if (!selectedId && overview?.goals.length) setSelectedId(overview.goals[0].goal_id);
   }, [overview, selectedId]);
@@ -308,6 +319,7 @@ function GoalWorkspace({
 }) {
   const [plan, setPlan] = useState<GoalPlan | null>(null);
   const [artifacts, setArtifacts] = useState<GoalArtifact[]>([]);
+  const [studio, setStudio] = useState<Artifact[]>([]);
   const reload = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const loadPlan = useCallback(() => {
@@ -316,15 +328,18 @@ function GoalWorkspace({
   const loadArtifacts = useCallback(() => {
     getGoalArtifacts(goalId).then((d) => setArtifacts(d.items)).catch(() => {});
   }, [goalId]);
+  const loadStudio = useCallback(() => {
+    getArtifacts({ goalId }).then((d) => setStudio(d.items)).catch(() => {});
+  }, [goalId]);
 
-  useEffect(() => { loadPlan(); loadArtifacts(); }, [loadPlan, loadArtifacts]);
+  useEffect(() => { loadPlan(); loadArtifacts(); loadStudio(); }, [loadPlan, loadArtifacts, loadStudio]);
 
   useEventStream(["agent", "goal"], (evt: SseEvent) => {
     if (reload.current) clearTimeout(reload.current);
-    reload.current = setTimeout(() => { loadPlan(); loadArtifacts(); onChanged(); }, 800);
+    reload.current = setTimeout(() => { loadPlan(); loadArtifacts(); loadStudio(); onChanged(); }, 800);
   });
 
-  const refresh = () => { loadPlan(); loadArtifacts(); onChanged(); };
+  const refresh = () => { loadPlan(); loadArtifacts(); loadStudio(); onChanged(); };
   const b = planBadge(plan?.status ?? "—");
   const [busy, setBusy] = useState(false);
   const act = async (fn: () => Promise<unknown>) => { setBusy(true); try { await fn(); refresh(); } finally { setBusy(false); } };
@@ -332,7 +347,8 @@ function GoalWorkspace({
   const tabs: { id: Tab; label: string; n?: number }[] = [
     { id: "conversation", label: "Conversation" },
     { id: "plan", label: "Plan", n: plan?.tasks.length },
-    { id: "artifacts", label: "Artifacts", n: artifacts.length },
+    { id: "studio", label: "Studio", n: studio.length },
+    { id: "artifacts", label: "Activity", n: artifacts.length },
   ];
 
   return (
@@ -397,6 +413,12 @@ function GoalWorkspace({
           <ConversationTab goalId={goalId} plan={plan} artifacts={artifacts} onActed={refresh} busy={busy} act={act} />
         )}
         {tab === "plan" && <PlanTab plan={plan} onChanged={refresh} />}
+        {tab === "studio" && (
+          <ArtifactList
+            artifacts={studio}
+            emptyHint="No deliverables yet. As workers write files and make things for this goal, they land here."
+          />
+        )}
         {tab === "artifacts" && <ArtifactsList artifacts={artifacts} />}
       </div>
     </div>
