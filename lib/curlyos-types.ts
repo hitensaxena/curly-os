@@ -588,3 +588,139 @@ export interface CreateApprovalResult {
   payload: Record<string, unknown>;
   created_at: string;
 }
+
+// --- Scheduled (user-defined) jobs -------------------------------------------
+
+export type CadenceType = "every" | "daily_at" | "weekly_at" | "monthly_at";
+
+// cadence_json shape depends on cadence_type:
+//   every      → { minutes }
+//   daily_at   → { hhmm }
+//   weekly_at  → { weekdays: number[] (0=Mon..6=Sun), hhmm }
+//   monthly_at → { day: 1..28, hhmm }
+export interface Cadence {
+  minutes?: number;
+  hhmm?: string;
+  weekdays?: number[];
+  day?: number;
+}
+
+export interface ScheduledJob {
+  id: string;
+  name: string;
+  task: string;
+  cadence_type: CadenceType;
+  cadence_json: Cadence;
+  cadence_display: string;
+  delivery: string;
+  enabled: boolean;
+  last_fired: string | null;
+  last_status: string;
+  last_run_id: string | null;
+  last_error: string | null;
+  next_due: string | null;
+  registered: boolean;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+export interface CreateScheduledJobBody {
+  name: string;
+  task: string;
+  cadence_type: CadenceType;
+  cadence_json: Cadence;
+  enabled?: boolean;
+}
+
+export type ScheduledJobPatch = Partial<CreateScheduledJobBody>;
+
+// --- Inbox (job delivery) ----------------------------------------------------
+
+export interface InboxItem {
+  id: string;
+  job_id: string | null;
+  job_name: string | null;
+  run_id: string | null;
+  title: string;
+  body: string;
+  meta: { status?: string } & Record<string, unknown>;
+  read: boolean;
+  read_at: string | null;
+  created_at: string | null;
+}
+
+// --- Goal-execution orchestrator ---------------------------------------------
+
+export type GoalPlanStatus =
+  | "proposed" | "approved" | "executing" | "done" | "abandoned";
+export type GoalTaskStatus =
+  | "pending" | "dispatched" | "running" | "parked"
+  | "completed" | "failed" | "skipped";
+
+export interface GoalTask {
+  id: string;
+  seq: number;
+  title: string;
+  task: string;
+  why: string;
+  status: GoalTaskStatus;
+  run_id: string | null;
+  result_summary: string | null;
+  updated_at: string | null;
+}
+
+export interface GoalPlan {
+  id: string;
+  goal_id: string;
+  status: GoalPlanStatus;
+  rationale: string;
+  created_at: string | null;
+  tasks: GoalTask[];
+}
+
+export interface OrchestratorGoal {
+  goal_id: string;
+  title: string;
+  goal_status: string;
+  progress: number;
+  plan_id: string;
+  plan_status: GoalPlanStatus;
+  total_tasks: number;
+  completed_tasks: number;
+  active_tasks: number;
+}
+
+export interface OrchestratorActiveRun {
+  run_id: string;
+  task: string;
+  status: string;
+  goal_id: string;
+  created_at: string | null;
+}
+
+export interface OrchestratorOverview {
+  goals: OrchestratorGoal[];
+  active_runs: OrchestratorActiveRun[];
+  pending_approvals: number;
+}
+
+export interface OrchestratorMessage {
+  id: string;
+  role: "user" | "orchestrator";
+  content: string;
+  meta: Record<string, unknown>;
+  created_at: string | null;
+}
+
+export interface OrchestratorChatResult {
+  reply: string;
+  action: string;
+  meta: Record<string, unknown>;
+}
+
+export interface DecomposeResult {
+  plan_id: string;
+  goal_id: string;
+  rationale: string;
+  task_count: number;
+}

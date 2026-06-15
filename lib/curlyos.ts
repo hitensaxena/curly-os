@@ -35,6 +35,15 @@ import type {
   SimExecuteResult,
   Stats,
   SystemsStatus,
+  ScheduledJob,
+  CreateScheduledJobBody,
+  ScheduledJobPatch,
+  InboxItem,
+  GoalPlan,
+  OrchestratorOverview,
+  OrchestratorMessage,
+  OrchestratorChatResult,
+  DecomposeResult,
 } from "@/lib/curlyos-types";
 
 async function getJSON<T>(path: string): Promise<T> {
@@ -401,4 +410,159 @@ export async function activatePrompt(
     throw Object.assign(new Error(msg), { status: r.status, detail: msg });
   }
   return r.json() as Promise<ActivateResult>;
+}
+
+// --- Scheduled jobs ----------------------------------------------------------
+
+async function throwIfBad(r: Response): Promise<void> {
+  if (!r.ok) {
+    const err = await r.json().catch(() => ({}));
+    const msg = (err as { detail?: string }).detail ?? `HTTP ${r.status}`;
+    throw Object.assign(new Error(msg), { status: r.status, detail: msg });
+  }
+}
+
+export function getScheduledJobs(): Promise<{ items: ScheduledJob[]; count: number }> {
+  return getJSON<{ items: ScheduledJob[]; count: number }>("/api/scheduled-jobs");
+}
+
+export async function createScheduledJob(
+  body: CreateScheduledJobBody,
+): Promise<ScheduledJob> {
+  const r = await fetch("/api/scheduled-jobs", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  await throwIfBad(r);
+  return r.json() as Promise<ScheduledJob>;
+}
+
+export async function patchScheduledJob(
+  id: string,
+  patch: ScheduledJobPatch,
+): Promise<ScheduledJob> {
+  const r = await fetch(`/api/scheduled-jobs/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(patch),
+  });
+  await throwIfBad(r);
+  return r.json() as Promise<ScheduledJob>;
+}
+
+export async function deleteScheduledJob(id: string): Promise<void> {
+  const r = await fetch(`/api/scheduled-jobs/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
+  await throwIfBad(r);
+}
+
+export async function runScheduledJobNow(
+  id: string,
+): Promise<{ id: string; status: string }> {
+  const r = await fetch(`/api/scheduled-jobs/${encodeURIComponent(id)}/run-now`, {
+    method: "POST",
+  });
+  await throwIfBad(r);
+  return r.json() as Promise<{ id: string; status: string }>;
+}
+
+// --- Inbox -------------------------------------------------------------------
+
+export function getInbox(
+  opts: { unread?: boolean; job?: string } = {},
+): Promise<{ items: InboxItem[]; count: number }> {
+  const qs = new URLSearchParams();
+  if (opts.unread) qs.set("unread", "true");
+  if (opts.job) qs.set("job", opts.job);
+  const q = qs.toString();
+  return getJSON<{ items: InboxItem[]; count: number }>(`/api/inbox${q ? `?${q}` : ""}`);
+}
+
+export function getInboxUnreadCount(): Promise<{ unread: number }> {
+  return getJSON<{ unread: number }>("/api/inbox/unread-count");
+}
+
+export async function markInboxRead(id: string): Promise<void> {
+  const r = await fetch(`/api/inbox/${encodeURIComponent(id)}/read`, {
+    method: "POST",
+  });
+  await throwIfBad(r);
+}
+
+// --- Goal-execution orchestrator ---------------------------------------------
+
+export function getOrchestratorOverview(): Promise<OrchestratorOverview> {
+  return getJSON<OrchestratorOverview>("/api/orchestrator/overview");
+}
+
+export function getGoalPlan(goalId: string): Promise<{ plan: GoalPlan | null }> {
+  return getJSON<{ plan: GoalPlan | null }>(
+    `/api/goals/${encodeURIComponent(goalId)}/plan`,
+  );
+}
+
+export async function decomposeGoal(
+  goalId: string,
+  guidance?: string,
+): Promise<DecomposeResult> {
+  const r = await fetch(`/api/goals/${encodeURIComponent(goalId)}/decompose`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ guidance: guidance ?? null }),
+  });
+  await throwIfBad(r);
+  return r.json() as Promise<DecomposeResult>;
+}
+
+export async function approvePlan(planId: string): Promise<{ status: string }> {
+  const r = await fetch(`/api/goal-plans/${encodeURIComponent(planId)}/approve`, {
+    method: "POST",
+  });
+  await throwIfBad(r);
+  return r.json() as Promise<{ status: string }>;
+}
+
+export async function dispatchTask(
+  taskId: string,
+): Promise<{ task_id: string; run_id?: string; status?: string }> {
+  const r = await fetch(`/api/goal-tasks/${encodeURIComponent(taskId)}/dispatch`, {
+    method: "POST",
+  });
+  await throwIfBad(r);
+  return r.json();
+}
+
+export async function dispatchPlan(
+  planId: string,
+): Promise<{ plan_id: string; dispatched: number }> {
+  const r = await fetch(
+    `/api/goal-plans/${encodeURIComponent(planId)}/dispatch-all`,
+    { method: "POST" },
+  );
+  await throwIfBad(r);
+  return r.json();
+}
+
+export async function orchestratorChat(
+  message: string,
+  goalId?: string,
+): Promise<OrchestratorChatResult> {
+  const r = await fetch("/api/orchestrator/chat", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ message, goal_id: goalId ?? null }),
+  });
+  await throwIfBad(r);
+  return r.json() as Promise<OrchestratorChatResult>;
+}
+
+export function getOrchestratorMessages(
+  goalId?: string,
+): Promise<{ items: OrchestratorMessage[]; count: number }> {
+  const q = goalId ? `?goal_id=${encodeURIComponent(goalId)}` : "";
+  return getJSON<{ items: OrchestratorMessage[]; count: number }>(
+    `/api/orchestrator/messages${q}`,
+  );
 }

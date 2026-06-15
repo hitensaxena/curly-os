@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { Logo } from "@/components/Logo";
+import { getInboxUnreadCount } from "@/lib/curlyos";
 import { NAV_GROUPS, NAV_HOME, SearchIcon, type NavItem } from "./nav";
 
 // Floating navigation — a top-left menu button that opens the workspace list
@@ -13,7 +14,24 @@ import { NAV_GROUPS, NAV_HOME, SearchIcon, type NavItem } from "./nav";
 export function FloatingNav() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  const [unread, setUnread] = useState(0);
   const ref = useRef<HTMLDivElement>(null);
+
+  // Inbox unread badge — refresh on mount, when the menu opens, on navigation,
+  // and whenever the inbox page signals a change.
+  useEffect(() => {
+    let alive = true;
+    const refresh = () =>
+      getInboxUnreadCount()
+        .then((d) => { if (alive) setUnread(d.unread); })
+        .catch(() => {});
+    refresh();
+    window.addEventListener("curly-inbox-changed", refresh);
+    return () => {
+      alive = false;
+      window.removeEventListener("curly-inbox-changed", refresh);
+    };
+  }, [pathname, open]);
 
   useEffect(() => {
     if (!open) return;
@@ -73,7 +91,13 @@ export function FloatingNav() {
                 {group.label}
               </div>
               {group.items.map((item) => (
-                <NavLink key={item.href} item={item} pathname={pathname} onNavigate={() => setOpen(false)} />
+                <NavLink
+                  key={item.href}
+                  item={item}
+                  pathname={pathname}
+                  badge={item.href === "/inbox" ? unread : 0}
+                  onNavigate={() => setOpen(false)}
+                />
               ))}
             </div>
           ))}
@@ -86,10 +110,12 @@ export function FloatingNav() {
 function NavLink({
   item,
   pathname,
+  badge = 0,
   onNavigate,
 }: {
   item: NavItem;
   pathname: string;
+  badge?: number;
   onNavigate: () => void;
 }) {
   const { href, label, Icon } = item;
@@ -109,6 +135,11 @@ function NavLink({
     >
       <Icon className={`h-4 w-4 shrink-0 ${active ? "text-accent" : ""}`} />
       {label}
+      {badge > 0 && (
+        <span className="ml-auto inline-flex min-w-5 items-center justify-center rounded-full bg-accent px-1.5 py-0.5 text-[10px] font-semibold text-white">
+          {badge > 99 ? "99+" : badge}
+        </span>
+      )}
     </Link>
   );
 }

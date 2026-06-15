@@ -31,6 +31,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/studio", label: "Studio", Icon: StudioIcon },
       { href: "/simulation", label: "Simulation", Icon: SimulationIcon },
       { href: "/goals", label: "Goals", Icon: GoalsIcon },
+      { href: "/orchestrator", label: "Orchestrator", Icon: OrchestratorIcon },
       { href: "/opportunities", label: "Opportunities", Icon: OpportunitiesIcon },
       { href: "/decisions", label: "Decisions", Icon: DecisionsIcon },
       { href: "/workspaces", label: "Workspaces", Icon: WorkspaceIcon },
@@ -51,6 +52,8 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/chat", label: "Chat", Icon: ChatIcon },
       { href: "/agent", label: "Agent", Icon: BoltIcon },
       { href: "/surface", label: "Surface", Icon: OrbIcon },
+      { href: "/jobs", label: "Jobs", Icon: JobsIcon },
+      { href: "/inbox", label: "Inbox", Icon: InboxIcon },
       { href: "/runs", label: "Runs", Icon: RunsIcon },
       { href: "/approvals", label: "Approvals", Icon: ApprovalsIcon },
     ],
@@ -300,6 +303,38 @@ export function ApprovalsIcon(p: SVGProps<SVGSVGElement>) {
     <svg {...base} {...p}>
       <path d="M12 3 4 6v6c0 4 3.6 7.7 8 9 4.4-1.3 8-5 8-9V6z" />
       <path d="M9 12l2 2 4-4" />
+    </svg>
+  );
+}
+// Orchestrator — a central hub conducting worker nodes.
+export function OrchestratorIcon(p: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...base} {...p}>
+      <circle cx="12" cy="12" r="2.5" />
+      <circle cx="5" cy="5" r="1.8" />
+      <circle cx="19" cy="5" r="1.8" />
+      <circle cx="5" cy="19" r="1.8" />
+      <circle cx="19" cy="19" r="1.8" />
+      <path d="M10.3 10.3 6.2 6.2M13.7 10.3l4.1-4.1M10.3 13.7l-4.1 4.1M13.7 13.7l4.1 4.1" />
+    </svg>
+  );
+}
+// Jobs — a clock face (scheduled, recurring work).
+export function JobsIcon(p: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...base} {...p}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7v5l3 2" />
+    </svg>
+  );
+}
+// Inbox — a tray with an incoming item.
+export function InboxIcon(p: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...base} {...p}>
+      <path d="M4 13l2 5h12l2-5" />
+      <path d="M4 13V5h16v8" />
+      <path d="M9 13a3 3 0 0 0 6 0" />
     </svg>
   );
 }
