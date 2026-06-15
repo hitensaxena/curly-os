@@ -18,6 +18,8 @@ import {
   getPendingApprovals,
   grantApproval,
   denyApproval,
+  getAgentBypass,
+  setAgentBypass,
 } from "@/lib/curlyos";
 import type {
   Goal,
@@ -29,6 +31,8 @@ import type {
   PendingApproval,
   SseEvent,
 } from "@/lib/curlyos-types";
+
+type GoalRef = { id: string; title: string; progress: number };
 
 // ── status chips ──────────────────────────────────────────────────────────────
 
@@ -108,11 +112,20 @@ export default function OrchestratorPage() {
     }, 700);
   });
 
-  const selectedGoal = goals.find((g) => g.id === selectedId);
+  // Resolve the selected goal's display info from the active list OR (so the
+  // plan always renders) the execution overview, which includes goals of any
+  // status.
+  const selectedGoal: GoalRef | undefined = (() => {
+    const g = goals.find((x) => x.id === selectedId);
+    if (g) return { id: g.id, title: g.title, progress: g.progress };
+    const o = overview?.goals.find((x) => x.goal_id === selectedId);
+    return o ? { id: o.goal_id, title: o.title, progress: o.progress } : undefined;
+  })();
+
   const refreshAll = () => { loadOverview(); if (selectedId) loadPlan(selectedId); };
 
   return (
-    <div className="mx-auto w-full max-w-6xl px-5 py-8 sm:px-8">
+    <div className="mx-auto w-full max-w-5xl px-5 py-8 sm:px-8">
       <PageHeading
         title="Orchestrator"
         eyebrow="Goal execution"
@@ -123,6 +136,7 @@ export default function OrchestratorPage() {
               `${overview.pending_approvals} approval${overview.pending_approvals !== 1 ? "s" : ""} pending`
             : "Loading..."
         }
+        actions={<BypassToggle />}
       />
 
       {/* Goals in execution — quick-select chips with progress */}
@@ -149,41 +163,86 @@ export default function OrchestratorPage() {
         </div>
       )}
 
-      <div className="grid gap-5 lg:grid-cols-5">
-        {/* LEFT — goal selection + plan */}
-        <div className="space-y-4 lg:col-span-3">
-          <div className="rounded-lg border border-border bg-surface p-4">
-            <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-muted">
-              Goal
-            </label>
-            <select
-              value={selectedId}
-              onChange={(e) => setSelectedId(e.target.value)}
-              className="w-full rounded border border-border bg-surface px-3 py-2 text-sm text-foreground focus:border-accent focus:outline-none"
-            >
-              <option value="">Select a goal to execute…</option>
-              {goals.map((g) => (
-                <option key={g.id} value={g.id}>{g.title}</option>
-              ))}
-            </select>
-          </div>
-
-          {selectedId && (
-            <PlanPanel
-              goal={selectedGoal}
-              plan={plan}
-              loading={loadingPlan}
-              onChanged={refreshAll}
-            />
-          )}
-        </div>
-
-        {/* RIGHT — command chat + approvals/updates */}
-        <div className="space-y-4 lg:col-span-2">
-          <ChatPanel goalId={selectedId} goalTitle={selectedGoal?.title} onActed={refreshAll} />
-          <ApprovalsFeed />
-        </div>
+      {/* Goal picker — full width */}
+      <div className="mb-4 rounded-lg border border-border bg-surface p-4">
+        <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-muted">
+          Goal
+        </label>
+        <select
+          value={selectedId}
+          onChange={(e) => setSelectedId(e.target.value)}
+          className="w-full rounded border border-border bg-surface px-3 py-2 text-sm text-foreground focus:border-accent focus:outline-none"
+        >
+          <option value="">Select a goal to execute…</option>
+          {goals.map((g) => (
+            <option key={g.id} value={g.id}>{g.title}</option>
+          ))}
+        </select>
       </div>
+
+      {/* Plan / progress — the primary focus, full width */}
+      {selectedId && (
+        <div className="mb-5">
+          <PlanPanel goal={selectedGoal} plan={plan} loading={loadingPlan} onChanged={refreshAll} />
+        </div>
+      )}
+
+      {/* Command chat + approvals/updates — secondary row */}
+      <div className="grid gap-5 lg:grid-cols-2">
+        <ChatPanel goalId={selectedId} goalTitle={selectedGoal?.title} onActed={refreshAll} />
+        <ApprovalsFeed />
+      </div>
+    </div>
+  );
+}
+
+// ── bypass toggle ──────────────────────────────────────────────────────────────
+
+function BypassToggle() {
+  const [on, setOn] = useState<boolean | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    getAgentBypass().then((d) => setOn(d.bypass)).catch(() => setOn(false));
+  }, []);
+
+  const toggle = async () => {
+    if (on === null || busy) return;
+    setBusy(true);
+    try {
+      const d = await setAgentBypass(!on);
+      setOn(d.bypass);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="flex items-center gap-2">
+      <div className="text-right">
+        <p className={`text-xs font-medium ${on ? "text-amber-400" : "text-muted"}`}>
+          Bypass {on === null ? "…" : on ? "ON" : "off"}
+        </p>
+        <p className="text-[10px] text-muted">
+          {on ? "agents act without approval" : "side-effects need approval"}
+        </p>
+      </div>
+      <button
+        role="switch"
+        aria-checked={!!on}
+        disabled={on === null || busy}
+        onClick={toggle}
+        title={on ? "Turn off — require approval again" : "Turn on — let agents run without approval"}
+        className={`relative h-6 w-11 shrink-0 rounded-full transition-colors disabled:opacity-50 ${
+          on ? "bg-amber-500" : "bg-surface-2 border border-border"
+        }`}
+      >
+        <span
+          className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition-transform ${
+            on ? "translate-x-5" : "translate-x-0.5"
+          }`}
+        />
+      </button>
     </div>
   );
 }
@@ -196,7 +255,7 @@ function PlanPanel({
   loading,
   onChanged,
 }: {
-  goal: Goal | undefined;
+  goal: GoalRef | undefined;
   plan: GoalPlan | null;
   loading: boolean;
   onChanged: () => void;

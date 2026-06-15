@@ -566,3 +566,17 @@ export function getOrchestratorMessages(
     `/api/orchestrator/messages${q}`,
   );
 }
+
+export function getAgentBypass(): Promise<{ bypass: boolean }> {
+  return getJSON<{ bypass: boolean }>("/api/settings/agent-bypass");
+}
+
+export async function setAgentBypass(enabled: boolean): Promise<{ bypass: boolean }> {
+  const r = await fetch("/api/settings/agent-bypass", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ enabled }),
+  });
+  await throwIfBad(r);
+  return r.json() as Promise<{ bypass: boolean }>;
+}
