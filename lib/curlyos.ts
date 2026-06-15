@@ -644,6 +644,20 @@ export async function runAutoplan(): Promise<{ planned: unknown[]; candidates: n
   return r.json();
 }
 
+export function getAutoPromote(): Promise<{ auto_promote: boolean }> {
+  return getJSON<{ auto_promote: boolean }>("/api/settings/auto-promote");
+}
+
+export async function setAutoPromote(enabled: boolean): Promise<{ auto_promote: boolean }> {
+  const r = await fetch("/api/settings/auto-promote", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ enabled }),
+  });
+  await throwIfBad(r);
+  return r.json() as Promise<{ auto_promote: boolean }>;
+}
+
 export function getAgentBypass(): Promise<{ bypass: boolean }> {
   return getJSON<{ bypass: boolean }>("/api/settings/agent-bypass");
 }

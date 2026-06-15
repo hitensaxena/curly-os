@@ -22,6 +22,8 @@ import {
   getAutoPlan,
   setAutoPlan,
   runAutoplan,
+  getAutoPromote,
+  setAutoPromote,
 } from "@/lib/curlyos";
 import type {
   Goal,
@@ -203,11 +205,13 @@ export default function OrchestratorPage() {
 function HeaderToggles({ onAutoplanned }: { onAutoplanned: () => void }) {
   const [bypass, setBypass] = useState<boolean | null>(null);
   const [autoplan, setAutoplan] = useState<boolean | null>(null);
+  const [autopromote, setAutopromote] = useState<boolean | null>(null);
   const [planning, setPlanning] = useState(false);
 
   useEffect(() => {
     getAgentBypass().then((d) => setBypass(d.bypass)).catch(() => setBypass(false));
     getAutoPlan().then((d) => setAutoplan(d.auto_plan)).catch(() => setAutoplan(true));
+    getAutoPromote().then((d) => setAutopromote(d.auto_promote)).catch(() => setAutopromote(true));
   }, []);
 
   const planNow = async () => {
@@ -217,6 +221,10 @@ function HeaderToggles({ onAutoplanned }: { onAutoplanned: () => void }) {
 
   return (
     <div className="flex flex-wrap items-center gap-3">
+      <MiniToggle
+        label="Auto-promote" on={autopromote} amber={false}
+        onToggle={async () => { const d = await setAutoPromote(!autopromote); setAutopromote(d.auto_promote); }}
+      />
       <MiniToggle
         label="Auto-plan" on={autoplan} amber={false}
         onToggle={async () => { const d = await setAutoPlan(!autoplan); setAutoplan(d.auto_plan); }}
