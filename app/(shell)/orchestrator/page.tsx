@@ -9,32 +9,46 @@ import {
   getGoals,
   getOrchestratorOverview,
   getGoalPlan,
+  getGoalArtifacts,
   decomposeGoal,
   approvePlan,
   dispatchTask,
-  dispatchPlan,
+  executePlan,
   orchestratorChat,
   getOrchestratorMessages,
-  getPendingApprovals,
-  grantApproval,
-  denyApproval,
   getAgentBypass,
   setAgentBypass,
+  getAutoPlan,
+  setAutoPlan,
+  runAutoplan,
 } from "@/lib/curlyos";
 import type {
   Goal,
   GoalPlan,
   GoalTask,
   GoalTaskStatus,
+  GoalArtifact,
   OrchestratorOverview,
+  OrchestratorGoal,
   OrchestratorMessage,
-  PendingApproval,
   SseEvent,
 } from "@/lib/curlyos-types";
 
-type GoalRef = { id: string; title: string; progress: number };
+type Tab = "conversation" | "plan" | "artifacts";
 
-// ── status chips ──────────────────────────────────────────────────────────────
+// ── small shared bits ───────────────────────────────────────────────────────
+
+function ProgressBar({ value, thin }: { value: number; thin?: boolean }) {
+  const pct = Math.round((value || 0) * 100);
+  return (
+    <div className="flex items-center gap-2">
+      <div className={`flex-1 overflow-hidden rounded-full bg-surface-2 ${thin ? "h-1" : "h-2"}`}>
+        <div className="h-full rounded-full bg-accent transition-all" style={{ width: `${pct}%` }} />
+      </div>
+      <span className="w-8 text-right font-mono text-[10px] text-muted">{pct}%</span>
+    </div>
+  );
+}
 
 const TASK_CHIP: Record<GoalTaskStatus, string> = {
   pending: "text-muted bg-surface-2 border-border",
@@ -49,414 +63,344 @@ const TASK_CHIP: Record<GoalTaskStatus, string> = {
 function TaskChip({ status }: { status: GoalTaskStatus }) {
   const label = status === "parked" ? "needs approval" : status;
   return (
-    <span
-      className={`inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] font-mono ${TASK_CHIP[status]}`}
-    >
-      {status === "running" && (
-        <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-accent" />
-      )}
+    <span className={`inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] font-mono ${TASK_CHIP[status]}`}>
+      {status === "running" && <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent" />}
       {label}
     </span>
   );
 }
 
-function ProgressBar({ value }: { value: number }) {
-  const pct = Math.round((value || 0) * 100);
-  return (
-    <div className="flex items-center gap-2">
-      <div className="h-2 flex-1 overflow-hidden rounded-full bg-surface-2">
-        <div className="h-full rounded-full bg-accent transition-all" style={{ width: `${pct}%` }} />
-      </div>
-      <span className="w-9 text-right font-mono text-[10px] text-muted">{pct}%</span>
-    </div>
-  );
+function planBadge(status: string): { label: string; cls: string } {
+  switch (status) {
+    case "proposed": return { label: "Plan ready", cls: "text-yellow-400 bg-yellow-400/10 border-yellow-400/30" };
+    case "approved": return { label: "Approved", cls: "text-accent bg-accent/10 border-accent/30" };
+    case "executing": return { label: "Executing", cls: "text-accent bg-accent/10 border-accent/30" };
+    case "done": return { label: "Done", cls: "text-green-400 bg-green-400/10 border-green-400/30" };
+    default: return { label: status, cls: "text-muted bg-surface-2 border-border" };
+  }
 }
+
+const ART_META: Record<string, { icon: string; cls: string }> = {
+  memory: { icon: "◆", cls: "text-blue-400 border-blue-400/30 bg-blue-400/10" },
+  decision: { icon: "⚖", cls: "text-purple-400 border-purple-400/30 bg-purple-400/10" },
+  subgoal: { icon: "◎", cls: "text-green-400 border-green-400/30 bg-green-400/10" },
+  sketch: { icon: "✎", cls: "text-amber-400 border-amber-400/30 bg-amber-400/10" },
+  notification: { icon: "🔔", cls: "text-cyan-400 border-cyan-400/30 bg-cyan-400/10" },
+};
 
 // ── page ──────────────────────────────────────────────────────────────────────
 
 export default function OrchestratorPage() {
-  const [goals, setGoals] = useState<Goal[]>([]);
   const [overview, setOverview] = useState<OrchestratorOverview | null>(null);
+  const [goals, setGoals] = useState<Goal[]>([]);
   const [selectedId, setSelectedId] = useState<string>("");
-  const [plan, setPlan] = useState<GoalPlan | null>(null);
-  const [loadingPlan, setLoadingPlan] = useState(false);
+  const [tab, setTab] = useState<Tab>("conversation");
   const reload = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const loadOverview = useCallback(() => {
     getOrchestratorOverview().then(setOverview).catch(() => {});
   }, []);
 
-  const loadPlan = useCallback((goalId: string) => {
-    if (!goalId) { setPlan(null); return; }
-    setLoadingPlan(true);
-    getGoalPlan(goalId)
-      .then((d) => setPlan(d.plan))
-      .catch(() => setPlan(null))
-      .finally(() => setLoadingPlan(false));
-  }, []);
-
   useEffect(() => {
-    getGoals("active").then((d) => setGoals(d.items)).catch(() => {});
     loadOverview();
+    getGoals("active").then((d) => setGoals(d.items)).catch(() => {});
   }, [loadOverview]);
 
-  useEffect(() => { loadPlan(selectedId); }, [selectedId, loadPlan]);
+  // auto-select the first orchestrated goal
+  useEffect(() => {
+    if (!selectedId && overview?.goals.length) setSelectedId(overview.goals[0].goal_id);
+  }, [overview, selectedId]);
 
-  // Live: any agent/goal/approval event refreshes overview + the open plan.
-  useEventStream(["agent", "goal", "safety"], (evt: SseEvent) => {
-    void evt;
+  useEventStream(["agent", "goal", "safety"], () => {
     if (reload.current) clearTimeout(reload.current);
-    reload.current = setTimeout(() => {
-      loadOverview();
-      if (selectedId) loadPlan(selectedId);
-    }, 700);
+    reload.current = setTimeout(loadOverview, 800);
   });
 
-  // Resolve the selected goal's display info from the active list OR (so the
-  // plan always renders) the execution overview, which includes goals of any
-  // status.
-  const selectedGoal: GoalRef | undefined = (() => {
+  const orchestrated: OrchestratorGoal[] = overview?.goals ?? [];
+  const selGoalRef: { title: string; progress: number } | undefined = (() => {
+    const o = orchestrated.find((g) => g.goal_id === selectedId);
+    if (o) return { title: o.title, progress: o.progress };
     const g = goals.find((x) => x.id === selectedId);
-    if (g) return { id: g.id, title: g.title, progress: g.progress };
-    const o = overview?.goals.find((x) => x.goal_id === selectedId);
-    return o ? { id: o.goal_id, title: o.title, progress: o.progress } : undefined;
+    return g ? { title: g.title, progress: g.progress } : undefined;
   })();
 
-  const refreshAll = () => { loadOverview(); if (selectedId) loadPlan(selectedId); };
-
   return (
-    <div className="mx-auto w-full max-w-5xl px-5 py-8 sm:px-8">
+    <div className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6">
       <PageHeading
         title="Orchestrator"
         eyebrow="Goal execution"
         subtitle={
           overview
-            ? `${overview.goals.length} goal${overview.goals.length !== 1 ? "s" : ""} in execution · ` +
-              `${overview.active_runs.length} worker${overview.active_runs.length !== 1 ? "s" : ""} active · ` +
-              `${overview.pending_approvals} approval${overview.pending_approvals !== 1 ? "s" : ""} pending`
-            : "Loading..."
+            ? `${orchestrated.length} orchestrated · ${overview.active_runs.length} working · ${overview.pending_approvals} approvals`
+            : "Loading…"
         }
-        actions={<BypassToggle />}
+        actions={<HeaderToggles onAutoplanned={loadOverview} />}
       />
 
-      {/* Goals in execution — quick-select chips with progress */}
-      {overview && overview.goals.length > 0 && (
-        <div className="mb-5 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-          {overview.goals.map((g) => (
-            <button
-              key={g.goal_id}
-              onClick={() => setSelectedId(g.goal_id)}
-              className={`rounded-lg border bg-surface p-3 text-left transition-colors ${
-                selectedId === g.goal_id ? "border-accent" : "border-border hover:border-border-soft"
-              }`}
-            >
-              <p className="truncate text-xs font-medium text-foreground">{g.title}</p>
-              <div className="mt-2">
-                <ProgressBar value={g.progress} />
-              </div>
-              <p className="mt-1 font-mono text-[10px] text-muted">
-                {g.completed_tasks}/{g.total_tasks} done
-                {g.active_tasks > 0 && ` · ${g.active_tasks} active`} · {g.plan_status}
-              </p>
-            </button>
-          ))}
-        </div>
-      )}
+      <div className="grid gap-5 lg:grid-cols-[280px_1fr]">
+        {/* Left rail — orchestrated goals */}
+        <aside className="space-y-3">
+          <GoalRail
+            goals={orchestrated}
+            allGoals={goals}
+            selectedId={selectedId}
+            onSelect={(id) => { setSelectedId(id); setTab("conversation"); }}
+          />
+        </aside>
 
-      {/* Goal picker — full width */}
-      <div className="mb-4 rounded-lg border border-border bg-surface p-4">
-        <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-muted">
-          Goal
-        </label>
-        <select
-          value={selectedId}
-          onChange={(e) => setSelectedId(e.target.value)}
-          className="w-full rounded border border-border bg-surface px-3 py-2 text-sm text-foreground focus:border-accent focus:outline-none"
-        >
-          <option value="">Select a goal to execute…</option>
-          {goals.map((g) => (
-            <option key={g.id} value={g.id}>{g.title}</option>
-          ))}
-        </select>
-      </div>
-
-      {/* Plan / progress — the primary focus, full width */}
-      {selectedId && (
-        <div className="mb-5">
-          <PlanPanel goal={selectedGoal} plan={plan} loading={loadingPlan} onChanged={refreshAll} />
-        </div>
-      )}
-
-      {/* Command chat + approvals/updates — secondary row */}
-      <div className="grid gap-5 lg:grid-cols-2">
-        <ChatPanel goalId={selectedId} goalTitle={selectedGoal?.title} onActed={refreshAll} />
-        <ApprovalsFeed />
+        {/* Main pane — selected goal workspace */}
+        <main className="min-w-0">
+          {!selGoalRef ? (
+            <div className="rounded-lg border border-border bg-surface p-10 text-center text-sm text-muted">
+              Select a goal on the left, or let the orchestrator plan one.
+            </div>
+          ) : (
+            <GoalWorkspace
+              key={selectedId}
+              goalId={selectedId}
+              ref0={selGoalRef}
+              tab={tab}
+              setTab={setTab}
+              onChanged={loadOverview}
+            />
+          )}
+        </main>
       </div>
     </div>
   );
 }
 
-// ── bypass toggle ──────────────────────────────────────────────────────────────
+// ── header toggles (bypass + autoplan + plan-now) ─────────────────────────────
 
-function BypassToggle() {
-  const [on, setOn] = useState<boolean | null>(null);
-  const [busy, setBusy] = useState(false);
+function HeaderToggles({ onAutoplanned }: { onAutoplanned: () => void }) {
+  const [bypass, setBypass] = useState<boolean | null>(null);
+  const [autoplan, setAutoplan] = useState<boolean | null>(null);
+  const [planning, setPlanning] = useState(false);
 
   useEffect(() => {
-    getAgentBypass().then((d) => setOn(d.bypass)).catch(() => setOn(false));
+    getAgentBypass().then((d) => setBypass(d.bypass)).catch(() => setBypass(false));
+    getAutoPlan().then((d) => setAutoplan(d.auto_plan)).catch(() => setAutoplan(true));
   }, []);
 
-  const toggle = async () => {
-    if (on === null || busy) return;
-    setBusy(true);
-    try {
-      const d = await setAgentBypass(!on);
-      setOn(d.bypass);
-    } finally {
-      setBusy(false);
-    }
+  const planNow = async () => {
+    setPlanning(true);
+    try { await runAutoplan(); onAutoplanned(); } finally { setPlanning(false); }
   };
 
   return (
-    <div className="flex items-center gap-2">
-      <div className="text-right">
-        <p className={`text-xs font-medium ${on ? "text-amber-400" : "text-muted"}`}>
-          Bypass {on === null ? "…" : on ? "ON" : "off"}
-        </p>
-        <p className="text-[10px] text-muted">
-          {on ? "agents act without approval" : "side-effects need approval"}
-        </p>
-      </div>
+    <div className="flex flex-wrap items-center gap-3">
+      <MiniToggle
+        label="Auto-plan" on={autoplan} amber={false}
+        onToggle={async () => { const d = await setAutoPlan(!autoplan); setAutoplan(d.auto_plan); }}
+      />
+      <MiniToggle
+        label="Bypass" on={bypass} amber
+        onToggle={async () => { const d = await setAgentBypass(!bypass); setBypass(d.bypass); }}
+      />
       <button
-        role="switch"
-        aria-checked={!!on}
-        disabled={on === null || busy}
-        onClick={toggle}
-        title={on ? "Turn off — require approval again" : "Turn on — let agents run without approval"}
-        className={`relative h-6 w-11 shrink-0 rounded-full transition-colors disabled:opacity-50 ${
-          on ? "bg-amber-500" : "bg-surface-2 border border-border"
-        }`}
+        onClick={planNow}
+        disabled={planning}
+        className="rounded border border-border px-3 py-1.5 text-xs text-foreground hover:bg-surface-2 disabled:opacity-50"
       >
-        <span
-          className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition-transform ${
-            on ? "translate-x-5" : "translate-x-0.5"
-          }`}
-        />
+        {planning ? "Planning…" : "Plan now"}
       </button>
     </div>
   );
 }
 
-// ── plan panel ──────────────────────────────────────────────────────────────
-
-function PlanPanel({
-  goal,
-  plan,
-  loading,
-  onChanged,
-}: {
-  goal: GoalRef | undefined;
-  plan: GoalPlan | null;
-  loading: boolean;
-  onChanged: () => void;
-}) {
+function MiniToggle({
+  label, on, amber, onToggle,
+}: { label: string; on: boolean | null; amber: boolean; onToggle: () => Promise<void> }) {
   const [busy, setBusy] = useState(false);
-  const [guidance, setGuidance] = useState("");
-  const [error, setError] = useState("");
-
-  const run = async (fn: () => Promise<unknown>) => {
-    setBusy(true);
-    setError("");
-    try {
-      await fn();
-      onChanged();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Action failed.");
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  if (!goal) return null;
-
+  const click = async () => { if (on === null || busy) return; setBusy(true); try { await onToggle(); } finally { setBusy(false); } };
   return (
-    <div className="rounded-lg border border-border bg-surface p-4">
-      <div className="mb-3 flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h2 className="text-sm font-semibold text-foreground">{goal.title}</h2>
-          <div className="mt-2 w-48"><ProgressBar value={goal.progress} /></div>
-        </div>
-        {plan && (
-          <span className="rounded border border-border bg-surface-2 px-1.5 py-0.5 text-[10px] font-mono text-muted">
-            plan {plan.status}
-          </span>
-        )}
-      </div>
-
-      {loading && <p className="text-xs text-muted">Loading plan…</p>}
-
-      {/* No plan yet → decompose */}
-      {!loading && !plan && (
-        <div className="space-y-2">
-          <p className="text-xs text-muted">
-            No execution plan yet. Tell the orchestrator how to approach it (optional), then break it
-            into worker tasks.
-          </p>
-          <textarea
-            value={guidance}
-            onChange={(e) => setGuidance(e.target.value)}
-            rows={2}
-            placeholder="Optional guidance (e.g. focus on X first)…"
-            className="w-full resize-y rounded border border-border bg-surface px-3 py-2 text-sm text-foreground placeholder:text-muted focus:border-accent focus:outline-none"
-          />
-          <button
-            disabled={busy}
-            onClick={() => run(() => decomposeGoal(goal.id, guidance.trim() || undefined))}
-            className="rounded bg-accent px-4 py-2 text-sm text-white hover:bg-accent/80 disabled:opacity-40"
-          >
-            {busy ? "Planning…" : "Break into tasks"}
-          </button>
-        </div>
-      )}
-
-      {/* Plan exists */}
-      {!loading && plan && (
-        <div className="space-y-3">
-          {plan.rationale && (
-            <p className="rounded border border-border bg-surface-2/40 p-2 text-xs text-muted">
-              {plan.rationale}
-            </p>
-          )}
-
-          <div className="space-y-2">
-            {plan.tasks.map((t) => (
-              <TaskRow key={t.id} task={t} planStatus={plan.status} onChanged={onChanged} />
-            ))}
-          </div>
-
-          {/* Plan-level actions */}
-          <div className="flex flex-wrap items-center gap-2 border-t border-border pt-3">
-            {plan.status === "proposed" && (
-              <button
-                disabled={busy}
-                onClick={() => run(() => approvePlan(plan.id))}
-                className="rounded bg-green-500/80 px-3 py-1.5 text-sm text-white hover:bg-green-500 disabled:opacity-40"
-              >
-                Approve plan
-              </button>
-            )}
-            {(plan.status === "approved" || plan.status === "executing") &&
-              plan.tasks.some((t) => t.status === "pending") && (
-                <button
-                  disabled={busy}
-                  onClick={() => run(() => dispatchPlan(plan.id))}
-                  className="rounded bg-accent px-3 py-1.5 text-sm text-white hover:bg-accent/80 disabled:opacity-40"
-                >
-                  Dispatch all workers
-                </button>
-              )}
-            <button
-              disabled={busy}
-              onClick={() => run(() => decomposeGoal(plan.goal_id))}
-              className="rounded border border-border px-3 py-1.5 text-sm text-muted hover:text-foreground disabled:opacity-40"
-            >
-              Re-plan
-            </button>
-          </div>
-        </div>
-      )}
-
-      {error && <p className="mt-2 text-xs text-red-400">{error}</p>}
-    </div>
+    <button onClick={click} disabled={on === null || busy} className="flex items-center gap-1.5 disabled:opacity-50" title={`${label}: ${on ? "on" : "off"}`}>
+      <span className={`relative h-5 w-9 rounded-full transition-colors ${on ? (amber ? "bg-amber-500" : "bg-accent") : "bg-surface-2 border border-border"}`}>
+        <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-transform ${on ? "translate-x-4" : "translate-x-0.5"}`} />
+      </span>
+      <span className={`text-[11px] ${on ? (amber ? "text-amber-400" : "text-accent") : "text-muted"}`}>{label}</span>
+    </button>
   );
 }
 
-function TaskRow({
-  task,
-  planStatus,
-  onChanged,
-}: {
-  task: GoalTask;
-  planStatus: string;
-  onChanged: () => void;
-}) {
-  const [busy, setBusy] = useState(false);
-  const [expanded, setExpanded] = useState(false);
-  const canDispatch =
-    task.status === "pending" && (planStatus === "approved" || planStatus === "executing");
-  const live = task.status === "running" || task.status === "parked";
+// ── goal rail ─────────────────────────────────────────────────────────────────
 
-  const dispatch = async () => {
-    setBusy(true);
-    try { await dispatchTask(task.id); onChanged(); } finally { setBusy(false); }
-  };
+function GoalRail({
+  goals, allGoals, selectedId, onSelect,
+}: {
+  goals: OrchestratorGoal[];
+  allGoals: Goal[];
+  selectedId: string;
+  onSelect: (id: string) => void;
+}) {
+  const orchestratedIds = new Set(goals.map((g) => g.goal_id));
+  const others = allGoals.filter((g) => !orchestratedIds.has(g.id));
 
   return (
-    <div className="rounded border border-border bg-surface-2/30 p-3">
-      <div className="flex items-start gap-2">
-        <span className="mt-0.5 w-5 shrink-0 text-right font-mono text-[10px] text-muted">
-          {task.seq + 1}
-        </span>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-medium text-foreground">{task.title}</span>
-            <TaskChip status={task.status} />
-          </div>
-          <p className="mt-0.5 text-xs text-muted">{task.task}</p>
-
-          {(live || expanded) && task.run_id && (
-            <div className="mt-2 rounded border border-border bg-surface/60 p-2">
-              <JobActivity runId={task.run_id} onTerminal={() => onChanged()} />
+    <>
+      {goals.map((g) => {
+        const b = planBadge(g.plan_status);
+        return (
+          <button
+            key={g.goal_id}
+            onClick={() => onSelect(g.goal_id)}
+            className={`block w-full rounded-lg border bg-surface p-3 text-left transition-colors ${
+              selectedId === g.goal_id ? "border-accent" : "border-border hover:border-border-soft"
+            }`}
+          >
+            <div className="flex items-start justify-between gap-2">
+              <p className="line-clamp-2 text-xs font-medium text-foreground">{g.title}</p>
+              {g.active_tasks > 0 && <span className="mt-1 h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-accent" />}
             </div>
-          )}
-
-          {task.status === "completed" && task.result_summary && !expanded && (
-            <button
-              onClick={() => setExpanded(true)}
-              className="mt-1 text-[11px] text-accent hover:underline"
-            >
-              show result
-            </button>
-          )}
-          {expanded && task.result_summary && (
-            <p className="mt-2 whitespace-pre-wrap rounded border border-border bg-surface/60 p-2 text-xs text-foreground">
-              {task.result_summary}
-            </p>
-          )}
-        </div>
-
-        {canDispatch && (
-          <button
-            disabled={busy}
-            onClick={dispatch}
-            className="shrink-0 rounded border border-border px-2 py-0.5 text-[11px] text-foreground hover:bg-surface-2 disabled:opacity-40"
-          >
-            {busy ? "…" : "Dispatch"}
+            <div className="mt-2"><ProgressBar value={g.progress} thin /></div>
+            <div className="mt-1.5 flex items-center gap-1.5">
+              <span className={`rounded border px-1 py-0.5 text-[9px] font-mono ${b.cls}`}>{b.label}</span>
+              <span className="font-mono text-[9px] text-muted">{g.completed_tasks}/{g.total_tasks}</span>
+            </div>
           </button>
-        )}
-        {task.run_id && !live && (
-          <Link
-            href={`/runs/${task.run_id}`}
-            className="shrink-0 text-[11px] text-muted hover:text-accent"
+        );
+      })}
+
+      {others.length > 0 && (
+        <div className="rounded-lg border border-dashed border-border bg-surface/50 p-3">
+          <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted">Bring a goal in</p>
+          <select
+            value=""
+            onChange={(e) => e.target.value && onSelect(e.target.value)}
+            className="w-full rounded border border-border bg-surface px-2 py-1.5 text-xs text-foreground focus:border-accent focus:outline-none"
           >
-            run &#8250;
-          </Link>
-        )}
-      </div>
-    </div>
+            <option value="">Pick a goal…</option>
+            {others.map((g) => <option key={g.id} value={g.id}>{g.title}</option>)}
+          </select>
+        </div>
+      )}
+    </>
   );
 }
 
-// ── command chat ──────────────────────────────────────────────────────────────
+// ── goal workspace (header + tabs) ────────────────────────────────────────────
 
-function ChatPanel({
-  goalId,
-  goalTitle,
-  onActed,
+function GoalWorkspace({
+  goalId, ref0, tab, setTab, onChanged,
 }: {
   goalId: string;
-  goalTitle?: string;
+  ref0: { title: string; progress: number };
+  tab: Tab;
+  setTab: (t: Tab) => void;
+  onChanged: () => void;
+}) {
+  const [plan, setPlan] = useState<GoalPlan | null>(null);
+  const [artifacts, setArtifacts] = useState<GoalArtifact[]>([]);
+  const reload = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const loadPlan = useCallback(() => {
+    getGoalPlan(goalId).then((d) => setPlan(d.plan)).catch(() => setPlan(null));
+  }, [goalId]);
+  const loadArtifacts = useCallback(() => {
+    getGoalArtifacts(goalId).then((d) => setArtifacts(d.items)).catch(() => {});
+  }, [goalId]);
+
+  useEffect(() => { loadPlan(); loadArtifacts(); }, [loadPlan, loadArtifacts]);
+
+  useEventStream(["agent", "goal"], (evt: SseEvent) => {
+    if (reload.current) clearTimeout(reload.current);
+    reload.current = setTimeout(() => { loadPlan(); loadArtifacts(); onChanged(); }, 800);
+  });
+
+  const refresh = () => { loadPlan(); loadArtifacts(); onChanged(); };
+  const b = planBadge(plan?.status ?? "—");
+  const [busy, setBusy] = useState(false);
+  const act = async (fn: () => Promise<unknown>) => { setBusy(true); try { await fn(); refresh(); } finally { setBusy(false); } };
+
+  const tabs: { id: Tab; label: string; n?: number }[] = [
+    { id: "conversation", label: "Conversation" },
+    { id: "plan", label: "Plan", n: plan?.tasks.length },
+    { id: "artifacts", label: "Artifacts", n: artifacts.length },
+  ];
+
+  return (
+    <div className="rounded-lg border border-border bg-surface">
+      {/* header */}
+      <div className="border-b border-border p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h2 className="text-sm font-semibold text-foreground">{ref0.title}</h2>
+            <div className="mt-2 w-56"><ProgressBar value={ref0.progress} /></div>
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            {plan && <span className={`rounded border px-1.5 py-0.5 text-[10px] font-mono ${b.cls}`}>{b.label}</span>}
+            {plan?.status === "proposed" && (
+              <button
+                disabled={busy}
+                onClick={() => act(() => executePlan(plan.id))}
+                className="rounded bg-accent px-3 py-1.5 text-xs text-white hover:bg-accent/80 disabled:opacity-40"
+              >
+                Execute plan
+              </button>
+            )}
+            {!plan && (
+              <button
+                disabled={busy}
+                onClick={() => act(() => decomposeGoal(goalId))}
+                className="rounded bg-accent px-3 py-1.5 text-xs text-white hover:bg-accent/80 disabled:opacity-40"
+              >
+                {busy ? "Planning…" : "Plan this goal"}
+              </button>
+            )}
+            {plan && (
+              <button
+                disabled={busy}
+                onClick={() => act(() => decomposeGoal(goalId))}
+                className="rounded border border-border px-2.5 py-1.5 text-xs text-muted hover:text-foreground disabled:opacity-40"
+              >
+                Re-plan
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* tabs */}
+        <div className="mt-3 flex gap-1">
+          {tabs.map((t) => (
+            <button
+              key={t.id}
+              onClick={() => setTab(t.id)}
+              className={`rounded px-3 py-1.5 text-xs transition-colors ${
+                tab === t.id ? "bg-surface-2 text-foreground" : "text-muted hover:text-foreground"
+              }`}
+            >
+              {t.label}{typeof t.n === "number" && t.n > 0 ? ` (${t.n})` : ""}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="p-4">
+        {tab === "conversation" && (
+          <ConversationTab goalId={goalId} plan={plan} artifacts={artifacts} onActed={refresh} busy={busy} act={act} />
+        )}
+        {tab === "plan" && <PlanTab plan={plan} onChanged={refresh} />}
+        {tab === "artifacts" && <ArtifactsList artifacts={artifacts} />}
+      </div>
+    </div>
+  );
+}
+
+// ── conversation tab (messages + artifacts + plan card + chat) ────────────────
+
+type FeedItem =
+  | { kind: "msg"; at: number; m: OrchestratorMessage }
+  | { kind: "artifact"; at: number; a: GoalArtifact };
+
+function ConversationTab({
+  goalId, plan, artifacts, onActed, busy, act,
+}: {
+  goalId: string;
+  plan: GoalPlan | null;
+  artifacts: GoalArtifact[];
   onActed: () => void;
+  busy: boolean;
+  act: (fn: () => Promise<unknown>) => Promise<void>;
 }) {
   const [messages, setMessages] = useState<OrchestratorMessage[]>([]);
   const [input, setInput] = useState("");
@@ -464,87 +408,83 @@ function ChatPanel({
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const load = useCallback(() => {
-    getOrchestratorMessages(goalId || undefined)
-      .then((d) => setMessages(d.items))
-      .catch(() => {});
+    getOrchestratorMessages(goalId).then((d) => setMessages(d.items)).catch(() => {});
   }, [goalId]);
-
   useEffect(() => { load(); }, [load]);
-  useEffect(() => {
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
-  }, [messages]);
+
+  const feed: FeedItem[] = [
+    ...messages.map((m) => ({ kind: "msg" as const, at: m.created_at ? Date.parse(m.created_at) : 0, m })),
+    ...artifacts.map((a) => ({ kind: "artifact" as const, at: a.created_at ? Date.parse(a.created_at) : 0, a })),
+  ].sort((x, y) => x.at - y.at);
+
+  useEffect(() => { scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight }); }, [messages, artifacts]);
 
   const send = async () => {
     const msg = input.trim();
     if (!msg || sending) return;
     setSending(true);
-    // optimistic echo
-    setMessages((m) => [
-      ...m,
-      { id: `tmp-${m.length}`, role: "user", content: msg, meta: {}, created_at: null },
-    ]);
+    setMessages((m) => [...m, { id: `tmp${m.length}`, role: "user", content: msg, meta: {}, created_at: new Date().toISOString() }]);
     setInput("");
-    try {
-      await orchestratorChat(msg, goalId || undefined);
-      load();
-      onActed();
-    } catch {
-      setMessages((m) => [
-        ...m,
-        { id: `err-${m.length}`, role: "orchestrator", content: "Sorry — that failed. Try again.", meta: {}, created_at: null },
-      ]);
-    } finally {
-      setSending(false);
-    }
+    try { await orchestratorChat(msg, goalId); load(); onActed(); }
+    catch { setMessages((m) => [...m, { id: `e${m.length}`, role: "orchestrator", content: "That failed — try again.", meta: {}, created_at: null }]); }
+    finally { setSending(false); }
   };
 
   return (
-    <div className="flex h-[420px] flex-col rounded-lg border border-border bg-surface">
-      <div className="border-b border-border px-4 py-2">
-        <p className="text-xs font-semibold text-foreground">Command the orchestrator</p>
-        <p className="text-[10px] text-muted">
-          {goalTitle ? `Scoped to: ${goalTitle}` : "Select a goal to scope commands"}
-        </p>
-      </div>
-
-      <div ref={scrollRef} className="flex-1 space-y-2 overflow-y-auto px-3 py-3">
-        {messages.length === 0 && (
-          <p className="px-1 text-xs text-muted">
-            Try: &ldquo;break this down&rdquo;, &ldquo;approve&rdquo;, &ldquo;start the workers&rdquo;,
-            or &ldquo;how&rsquo;s it going?&rdquo;
+    <div className="flex h-[460px] flex-col">
+      <div ref={scrollRef} className="flex-1 space-y-2 overflow-y-auto pr-1">
+        {feed.length === 0 && (
+          <p className="text-xs text-muted">
+            Talk to the orchestrator about this goal — &ldquo;break this down&rdquo;, &ldquo;execute&rdquo;,
+            &ldquo;how&rsquo;s it going?&rdquo;. Artifacts your workers produce show up here too.
           </p>
         )}
-        {messages.map((m) => (
-          <div
-            key={m.id}
-            className={`max-w-[85%] rounded-lg px-3 py-2 text-xs ${
-              m.role === "user"
-                ? "ml-auto bg-accent/15 text-foreground"
-                : "bg-surface-2 text-foreground"
-            }`}
-          >
-            {m.content}
-            {typeof m.meta?.action === "string" && m.meta.action !== "none" && (
-              <span className="mt-1 block font-mono text-[9px] text-muted">→ {m.meta.action}</span>
-            )}
-          </div>
-        ))}
-        {sending && <p className="px-1 text-[10px] text-muted">orchestrator is thinking…</p>}
+        {feed.map((f) =>
+          f.kind === "msg" ? (
+            <div key={f.m.id} className={`max-w-[85%] rounded-lg px-3 py-2 text-xs ${
+              f.m.role === "user" ? "ml-auto bg-accent/15 text-foreground" : "bg-surface-2 text-foreground"
+            }`}>
+              {f.m.content}
+              {typeof f.m.meta?.action === "string" && f.m.meta.action !== "none" && (
+                <span className="mt-1 block font-mono text-[9px] text-muted">→ {f.m.meta.action}</span>
+              )}
+            </div>
+          ) : (
+            <ArtifactCard key={`${f.a.run_id}-${f.at}`} a={f.a} inline />
+          ),
+        )}
+        {sending && <p className="text-[10px] text-muted">orchestrator is thinking…</p>}
       </div>
 
-      <div className="flex gap-2 border-t border-border p-2">
+      {/* plan card */}
+      {plan?.status === "proposed" && (
+        <div className="my-2 rounded-lg border border-yellow-400/30 bg-yellow-400/5 p-3">
+          <p className="text-xs font-semibold text-foreground">Proposed plan — {plan.tasks.length} tasks</p>
+          {plan.rationale && <p className="mt-0.5 text-[11px] text-muted">{plan.rationale}</p>}
+          <ol className="mt-1.5 space-y-0.5">
+            {plan.tasks.map((t) => (
+              <li key={t.id} className="text-[11px] text-muted">{t.seq + 1}. {t.title}</li>
+            ))}
+          </ol>
+          <button
+            disabled={busy}
+            onClick={() => act(() => executePlan(plan.id))}
+            className="mt-2 rounded bg-accent px-3 py-1.5 text-xs text-white hover:bg-accent/80 disabled:opacity-40"
+          >
+            Execute plan
+          </button>
+        </div>
+      )}
+
+      <div className="mt-2 flex gap-2 border-t border-border pt-2">
         <input
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && send()}
-          placeholder="Tell the orchestrator what to do…"
+          placeholder="Message the orchestrator about this goal…"
           className="flex-1 rounded border border-border bg-surface px-3 py-2 text-sm text-foreground placeholder:text-muted focus:border-accent focus:outline-none"
         />
-        <button
-          onClick={send}
-          disabled={sending || !input.trim()}
-          className="rounded bg-accent px-3 py-2 text-sm text-white hover:bg-accent/80 disabled:opacity-40"
-        >
+        <button onClick={send} disabled={sending || !input.trim()} className="rounded bg-accent px-3 py-2 text-sm text-white hover:bg-accent/80 disabled:opacity-40">
           Send
         </button>
       </div>
@@ -552,117 +492,92 @@ function ChatPanel({
   );
 }
 
-// ── approvals + updates feed ───────────────────────────────────────────────────
+// ── plan tab ──────────────────────────────────────────────────────────────────
 
-function ApprovalsFeed() {
-  const [approvals, setApprovals] = useState<PendingApproval[]>([]);
-  const [updates, setUpdates] = useState<{ id: string; text: string }[]>([]);
-  const [busy, setBusy] = useState<string | null>(null);
-
-  const load = useCallback(() => {
-    getPendingApprovals().then((d) => setApprovals(d.items)).catch(() => {});
-  }, []);
-
-  useEffect(() => { load(); }, [load]);
-
-  useEventStream(["agent", "goal", "safety"], (evt: SseEvent) => {
-    if (evt.type.includes("approval")) load();
-    const label = describeEvent(evt);
-    if (label) {
-      setUpdates((u) => [{ id: `${evt.seq}`, text: label }, ...u].slice(0, 12));
-    }
-  });
-
-  const decide = async (apvId: string, kind: "grant" | "deny") => {
-    setBusy(apvId);
-    try {
-      if (kind === "grant") await grantApproval(apvId);
-      else await denyApproval(apvId, "denied from orchestrator");
-      load();
-    } finally {
-      setBusy(null);
-    }
-  };
+function PlanTab({ plan, onChanged }: { plan: GoalPlan | null; onChanged: () => void }) {
+  const [busy, setBusy] = useState(false);
+  if (!plan) return <p className="text-xs text-muted">No plan yet. Use &ldquo;Plan this goal&rdquo; above.</p>;
+  const act = async (fn: () => Promise<unknown>) => { setBusy(true); try { await fn(); onChanged(); } finally { setBusy(false); } };
 
   return (
-    <div className="rounded-lg border border-border bg-surface">
-      <div className="border-b border-border px-4 py-2">
-        <p className="text-xs font-semibold text-foreground">
-          Approvals &amp; updates
-          {approvals.length > 0 && (
-            <span className="ml-2 rounded-full bg-yellow-400/20 px-1.5 py-0.5 text-[10px] text-yellow-400">
-              {approvals.length} pending
-            </span>
-          )}
-        </p>
+    <div className="space-y-3">
+      {plan.rationale && <p className="rounded border border-border bg-surface-2/40 p-2 text-xs text-muted">{plan.rationale}</p>}
+      <div className="space-y-2">
+        {plan.tasks.map((t) => <TaskRow key={t.id} task={t} planStatus={plan.status} onChanged={onChanged} />)}
       </div>
-
-      <div className="max-h-[360px] space-y-2 overflow-y-auto p-3">
-        {approvals.map((a) => (
-          <div key={a.apv_id} className="rounded border border-yellow-400/30 bg-yellow-400/5 p-2.5">
-            <div className="flex flex-wrap items-center gap-1.5">
-              <span className="text-[10px] font-semibold uppercase tracking-wide text-yellow-400">
-                Approval
-              </span>
-              <span className="font-mono text-[10px] text-muted">{a.action_class}</span>
-              {a.payload?.tool && (
-                <span className="font-mono text-[10px] text-muted">· {a.payload.tool}</span>
-              )}
-            </div>
-            {a.payload?.why && <p className="mt-1 text-xs text-foreground">{a.payload.why}</p>}
-            <div className="mt-2 flex items-center gap-2">
-              <button
-                disabled={busy === a.apv_id}
-                onClick={() => decide(a.apv_id, "grant")}
-                className="rounded bg-green-500/80 px-2.5 py-1 text-xs text-white hover:bg-green-500 disabled:opacity-40"
-              >
-                Grant
-              </button>
-              <button
-                disabled={busy === a.apv_id}
-                onClick={() => decide(a.apv_id, "deny")}
-                className="rounded border border-red-400/40 px-2.5 py-1 text-xs text-red-400 hover:bg-red-400/10 disabled:opacity-40"
-              >
-                Deny
-              </button>
-              {a.run_id && (
-                <Link href={`/runs/${a.run_id}`} className="text-[11px] text-muted hover:text-accent">
-                  run &#8250;
-                </Link>
-              )}
-            </div>
-          </div>
-        ))}
-
-        {approvals.length === 0 && updates.length === 0 && (
-          <p className="px-1 text-xs text-muted">No pending approvals. Live updates appear here.</p>
+      <div className="flex flex-wrap gap-2 border-t border-border pt-3">
+        {plan.status === "proposed" && (
+          <button disabled={busy} onClick={() => act(() => approvePlan(plan.id))} className="rounded bg-green-500/80 px-3 py-1.5 text-sm text-white hover:bg-green-500 disabled:opacity-40">Approve</button>
         )}
-
-        {updates.length > 0 && (
-          <div className="space-y-1 pt-1">
-            {updates.map((u) => (
-              <p key={u.id} className="border-l-2 border-border pl-2 text-[11px] text-muted">
-                {u.text}
-              </p>
-            ))}
-          </div>
+        {plan.status !== "done" && (
+          <button disabled={busy} onClick={() => act(() => executePlan(plan.id))} className="rounded bg-accent px-3 py-1.5 text-sm text-white hover:bg-accent/80 disabled:opacity-40">Execute all</button>
         )}
       </div>
     </div>
   );
 }
 
-// Turn an SSE event into a short human update line (best-effort).
-function describeEvent(evt: SseEvent): string | null {
-  const t = evt.type;
-  const d = (evt.data ?? {}) as Record<string, unknown>;
-  if (t.endsWith("goal.plan.proposed")) return `Plan proposed (${d.tasks ?? "?"} tasks)`;
-  if (t.endsWith("goal.plan.approved")) return "Plan approved";
-  if (t.endsWith("goal.task.dispatched")) return "Worker dispatched";
-  if (t.endsWith("goal.progress")) return `Goal progress: ${Math.round(Number(d.progress ?? 0) * 100)}%`;
-  if (t.endsWith("agent.run.completed")) return "A worker finished";
-  if (t.endsWith("agent.run.failed")) return "A worker failed";
-  if (t.includes("approval.requested")) return "Approval requested";
-  if (t.includes("approval.granted")) return "Approval granted";
-  return null;
+function TaskRow({ task, planStatus, onChanged }: { task: GoalTask; planStatus: string; onChanged: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const [open, setOpen] = useState(false);
+  const live = task.status === "running" || task.status === "parked";
+  const canDispatch = task.status === "pending" && (planStatus === "approved" || planStatus === "executing");
+
+  return (
+    <div className="rounded border border-border bg-surface-2/30 p-3">
+      <div className="flex items-start gap-2">
+        <span className="mt-0.5 w-5 shrink-0 text-right font-mono text-[10px] text-muted">{task.seq + 1}</span>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-medium text-foreground">{task.title}</span>
+            <TaskChip status={task.status} />
+          </div>
+          <p className="mt-0.5 text-xs text-muted">{task.task}</p>
+          {(live || open) && task.run_id && (
+            <div className="mt-2 rounded border border-border bg-surface/60 p-2">
+              <JobActivity runId={task.run_id} onTerminal={() => onChanged()} />
+            </div>
+          )}
+          {task.status === "completed" && task.result_summary && (
+            <button onClick={() => setOpen((v) => !v)} className="mt-1 text-[11px] text-accent hover:underline">
+              {open ? "hide" : "show"} result
+            </button>
+          )}
+          {open && task.result_summary && (
+            <p className="mt-1 whitespace-pre-wrap rounded border border-border bg-surface/60 p-2 text-xs text-foreground">{task.result_summary}</p>
+          )}
+        </div>
+        {canDispatch && (
+          <button disabled={busy} onClick={async () => { setBusy(true); try { await dispatchTask(task.id); onChanged(); } finally { setBusy(false); } }}
+            className="shrink-0 rounded border border-border px-2 py-0.5 text-[11px] text-foreground hover:bg-surface-2 disabled:opacity-40">
+            {busy ? "…" : "Run"}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── artifacts ─────────────────────────────────────────────────────────────────
+
+function ArtifactsList({ artifacts }: { artifacts: GoalArtifact[] }) {
+  if (artifacts.length === 0) return <p className="text-xs text-muted">No artifacts yet. They appear as workers produce memories, decisions, sketches and notes.</p>;
+  return <div className="space-y-2">{artifacts.map((a, i) => <ArtifactCard key={i} a={a} />)}</div>;
+}
+
+function ArtifactCard({ a, inline }: { a: GoalArtifact; inline?: boolean }) {
+  const m = ART_META[a.type] ?? { icon: "•", cls: "text-muted border-border bg-surface-2" };
+  return (
+    <div className={`rounded-lg border bg-surface p-3 ${inline ? "max-w-[92%] border-border" : "border-border"}`}>
+      <div className="flex items-center gap-2">
+        <span className={`inline-flex h-5 w-5 items-center justify-center rounded border text-[10px] ${m.cls}`}>{m.icon}</span>
+        <span className="text-[10px] font-semibold uppercase tracking-wide text-muted">{a.type}</span>
+        {a.created_at && <span className="ml-auto font-mono text-[9px] text-muted">{new Date(a.created_at).toLocaleString()}</span>}
+      </div>
+      <p className="mt-1.5 line-clamp-4 whitespace-pre-wrap text-xs text-foreground">{a.summary || "(no content)"}</p>
+      {a.run_id && (
+        <Link href={`/runs/${a.run_id}`} className="mt-1.5 inline-block text-[10px] text-muted hover:text-accent">from run &#8250;</Link>
+      )}
+    </div>
+  );
 }

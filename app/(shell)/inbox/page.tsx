@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { PageHeading } from "@/components/ui/PageHeading";
 import { useEventStream } from "@/lib/use-event-stream";
-import { getInbox, markInboxRead } from "@/lib/curlyos";
+import { getInbox, markInboxRead, executePlan } from "@/lib/curlyos";
 import type { InboxItem, SseEvent } from "@/lib/curlyos-types";
 
 function StatusChip({ status }: { status?: string }) {
@@ -193,6 +193,12 @@ export default function InboxPage() {
                     <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground">
                       {item.body}
                     </p>
+                    {item.meta?.kind === "plan" && typeof item.meta.plan_id === "string" && (
+                      <PlanActions
+                        planId={item.meta.plan_id}
+                        goalId={typeof item.meta.goal_id === "string" ? item.meta.goal_id : undefined}
+                      />
+                    )}
                     {item.run_id && (
                       <Link
                         href={`/runs/${item.run_id}`}
@@ -208,6 +214,43 @@ export default function InboxPage() {
           })}
         </div>
       )}
+    </div>
+  );
+}
+
+// Action row for a "plan ready" inbox item: execute (autonomous) or open in the
+// orchestrator to review first.
+function PlanActions({ planId, goalId }: { planId: string; goalId?: string }) {
+  const [state, setState] = useState<"idle" | "running" | "done" | "error">("idle");
+
+  const execute = async () => {
+    setState("running");
+    try {
+      await executePlan(planId);
+      setState("done");
+      window.dispatchEvent(new Event("curly-inbox-changed"));
+    } catch {
+      setState("error");
+    }
+  };
+
+  return (
+    <div className="mt-3 flex flex-wrap items-center gap-2">
+      <button
+        onClick={execute}
+        disabled={state === "running" || state === "done"}
+        className="rounded bg-accent px-3 py-1.5 text-xs text-white hover:bg-accent/80 disabled:opacity-50"
+      >
+        {state === "running" ? "Dispatching…" : state === "done" ? "Executing ✓" : "Approve & execute"}
+      </button>
+      <Link
+        href="/orchestrator"
+        className="rounded border border-border px-3 py-1.5 text-xs text-foreground hover:bg-surface-2"
+      >
+        Open in orchestrator
+      </Link>
+      {goalId && <span className="font-mono text-[10px] text-muted">{goalId.slice(0, 12)}…</span>}
+      {state === "error" && <span className="text-[11px] text-red-400">Failed — try again.</span>}
     </div>
   );
 }

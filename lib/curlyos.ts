@@ -44,6 +44,7 @@ import type {
   OrchestratorMessage,
   OrchestratorChatResult,
   DecomposeResult,
+  GoalArtifact,
 } from "@/lib/curlyos-types";
 
 async function getJSON<T>(path: string): Promise<T> {
@@ -565,6 +566,44 @@ export function getOrchestratorMessages(
   return getJSON<{ items: OrchestratorMessage[]; count: number }>(
     `/api/orchestrator/messages${q}`,
   );
+}
+
+export async function executePlan(
+  planId: string,
+): Promise<{ plan_id: string; dispatched: number }> {
+  const r = await fetch(`/api/goal-plans/${encodeURIComponent(planId)}/execute`, {
+    method: "POST",
+  });
+  await throwIfBad(r);
+  return r.json();
+}
+
+export function getGoalArtifacts(
+  goalId: string,
+): Promise<{ items: GoalArtifact[]; count: number }> {
+  return getJSON<{ items: GoalArtifact[]; count: number }>(
+    `/api/goals/${encodeURIComponent(goalId)}/artifacts`,
+  );
+}
+
+export function getAutoPlan(): Promise<{ auto_plan: boolean }> {
+  return getJSON<{ auto_plan: boolean }>("/api/settings/auto-plan");
+}
+
+export async function setAutoPlan(enabled: boolean): Promise<{ auto_plan: boolean }> {
+  const r = await fetch("/api/settings/auto-plan", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ enabled }),
+  });
+  await throwIfBad(r);
+  return r.json() as Promise<{ auto_plan: boolean }>;
+}
+
+export async function runAutoplan(): Promise<{ planned: unknown[]; candidates: number }> {
+  const r = await fetch("/api/orchestrator/autoplan", { method: "POST" });
+  await throwIfBad(r);
+  return r.json();
 }
 
 export function getAgentBypass(): Promise<{ bypass: boolean }> {

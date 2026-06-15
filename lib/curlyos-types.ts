@@ -724,3 +724,12 @@ export interface DecomposeResult {
   rationale: string;
   task_count: number;
 }
+
+export interface GoalArtifact {
+  type: string; // memory | decision | subgoal | sketch | notification
+  tool: string;
+  summary: string;
+  ref: string | null;
+  run_id: string | null;
+  created_at: string | null;
+}
