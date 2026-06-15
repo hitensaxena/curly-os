@@ -6,11 +6,11 @@ import { useEventStream } from "@/lib/use-event-stream";
 import type { OrchestratorMessage, SseEvent } from "@/lib/curlyos-types";
 
 /**
- * The project's conversation with the orchestrator. Anchored to the project's
- * primary goal (north-star, or the first goal) so commands like "plan it",
- * "approve", "start", "how's it going" act on the project's main thread.
+ * The project's own conversation with the orchestrator (a dedicated project-level
+ * thread, distinct from any single goal's). Commands like "plan it", "approve",
+ * "start" act on the project's primary goal; "status" summarizes all its goals.
  */
-export function ProjectChat({ anchorGoalId }: { anchorGoalId: string | null }) {
+export function ProjectChat({ projectId, hasGoals }: { projectId: string; hasGoals: boolean }) {
   const [messages, setMessages] = useState<OrchestratorMessage[]>([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
@@ -18,9 +18,8 @@ export function ProjectChat({ anchorGoalId }: { anchorGoalId: string | null }) {
   const reload = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const load = useCallback(() => {
-    if (!anchorGoalId) return;
-    getOrchestratorMessages(anchorGoalId).then((d) => setMessages(d.items)).catch(() => {});
-  }, [anchorGoalId]);
+    getOrchestratorMessages(undefined, projectId).then((d) => setMessages(d.items)).catch(() => {});
+  }, [projectId]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -35,11 +34,11 @@ export function ProjectChat({ anchorGoalId }: { anchorGoalId: string | null }) {
 
   const send = async () => {
     const msg = input.trim();
-    if (!msg || sending || !anchorGoalId) return;
+    if (!msg || sending) return;
     setSending(true);
     setMessages((m) => [...m, { id: `tmp${m.length}`, role: "user", content: msg, meta: {}, created_at: new Date().toISOString() }]);
     setInput("");
-    try { await orchestratorChat(msg, anchorGoalId); load(); }
+    try { await orchestratorChat(msg, undefined, projectId); load(); }
     catch { setMessages((m) => [...m, { id: `e${m.length}`, role: "orchestrator", content: "That failed — try again.", meta: {}, created_at: null }]); }
     finally { setSending(false); }
   };
@@ -51,7 +50,7 @@ export function ProjectChat({ anchorGoalId }: { anchorGoalId: string | null }) {
         <p className="text-[11px] text-muted">Steer the orchestrator across this project&rsquo;s goals.</p>
       </div>
       <div ref={scrollRef} className="flex-1 space-y-2 overflow-y-auto p-4">
-        {!anchorGoalId ? (
+        {!hasGoals ? (
           <p className="text-xs text-muted">Add a goal to this project to start a conversation.</p>
         ) : messages.length === 0 ? (
           <p className="text-xs text-muted">
@@ -77,11 +76,11 @@ export function ProjectChat({ anchorGoalId }: { anchorGoalId: string | null }) {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && send()}
-          disabled={!anchorGoalId}
+          disabled={!hasGoals}
           placeholder="Message the orchestrator about this project…"
           className="flex-1 rounded border border-border bg-surface px-3 py-2 text-sm text-foreground placeholder:text-muted focus:border-accent focus:outline-none disabled:opacity-50"
         />
-        <button onClick={send} disabled={sending || !input.trim() || !anchorGoalId}
+        <button onClick={send} disabled={sending || !input.trim() || !hasGoals}
           className="rounded bg-accent px-3 py-2 text-sm text-white hover:bg-accent/80 disabled:opacity-40">
           Send
         </button>

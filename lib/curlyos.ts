@@ -553,11 +553,12 @@ export async function dispatchPlan(
 export async function orchestratorChat(
   message: string,
   goalId?: string,
+  projectId?: string,
 ): Promise<OrchestratorChatResult> {
   const r = await fetch("/api/orchestrator/chat", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ message, goal_id: goalId ?? null }),
+    body: JSON.stringify({ message, goal_id: goalId ?? null, project_id: projectId ?? null }),
   });
   await throwIfBad(r);
   return r.json() as Promise<OrchestratorChatResult>;
@@ -565,10 +566,14 @@ export async function orchestratorChat(
 
 export function getOrchestratorMessages(
   goalId?: string,
+  projectId?: string,
 ): Promise<{ items: OrchestratorMessage[]; count: number }> {
-  const q = goalId ? `?goal_id=${encodeURIComponent(goalId)}` : "";
+  const params = new URLSearchParams();
+  if (projectId) params.set("project_id", projectId);
+  else if (goalId) params.set("goal_id", goalId);
+  const qs = params.toString();
   return getJSON<{ items: OrchestratorMessage[]; count: number }>(
-    `/api/orchestrator/messages${q}`,
+    `/api/orchestrator/messages${qs ? `?${qs}` : ""}`,
   );
 }
 

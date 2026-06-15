@@ -85,8 +85,6 @@ export default function ProjectOverviewPage({
   const artifacts = data?.artifacts ?? [];
   const northStarId = project?.north_star_goal_id ?? null;
   const basePath = `/workspaces/${wsId}/${projectId}`;
-  // The project chat anchors on the north-star goal, else the first goal.
-  const anchorGoalId = northStarId ?? goals[0]?.id ?? null;
 
   return (
     <div className="mx-auto w-full max-w-5xl px-5 py-8 sm:px-8">
@@ -119,7 +117,7 @@ export default function ProjectOverviewPage({
           {/* Chat (left) + Goals (right) */}
           <div className="grid gap-8 lg:grid-cols-[1.1fr_1fr]">
             <section>
-              <ProjectChat anchorGoalId={anchorGoalId} />
+              <ProjectChat projectId={projectId} hasGoals={goals.length > 0} />
             </section>
 
             <section>
