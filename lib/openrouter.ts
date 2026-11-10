@@ -1,39 +1,31 @@
-// Server-only OpenRouter access for the webapp chat. The model is configurable
-// via CURLYOS_CHAT_MODEL; the API key comes from the environment, falling back
-// to ~/.hermes/.env (the same source curlyos-core reads).
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
+// Server-only LLM access for the webapp chat.
+//
+// Speaks the OpenAI chat-completions protocol to any compatible endpoint. The
+// default is the local OpenCode Go bridge (127.0.0.1:8799, launchd
+// `art.curlybrackets.opencode-go-bridge`) — it owns the `x-opencode-session`
+// header and rotates the short-lived token, so this file only needs a base URL.
+//
+// Override with CURLYOS_CHAT_BASE_URL / CURLYOS_CHAT_MODEL / CURLYOS_CHAT_API_KEY
+// to point chat at any other OpenAI-compatible provider.
+const BASE = (
+  process.env.CURLYOS_CHAT_BASE_URL ?? "http://127.0.0.1:8799/v1"
+).replace(/\/+$/, "");
 
-export const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
-export const CHAT_MODEL = process.env.CURLYOS_CHAT_MODEL ?? "openrouter/owl-alpha";
+export const CHAT_COMPLETIONS_URL = `${BASE}/chat/completions`;
+export const CHAT_MODEL = process.env.CURLYOS_CHAT_MODEL ?? "kimi-k3";
 
-// Ordered failover chain (primary first, then backups). Mirrors curlyos-core's
-// CURLYOS_MODEL_CHAIN; on a 429/error from one model the chat route tries the
-// next (the :free backups rate-limit often).
-const DEFAULT_CHAIN =
-  "openrouter/owl-alpha,nex-agi/nex-n2-pro:free,nvidia/nemotron-3-ultra-550b-a55b:free";
+// Ordered failover chain (primary first, then backups). A model that 429s or
+// errors before the stream opens is skipped for the next. All three are
+// verified available on the OpenCode Go plan.
+const DEFAULT_CHAIN = "kimi-k3,claude-haiku-5-5,glm-5.3";
 export const CHAT_MODEL_CHAIN: string[] = (() => {
-  const raw = process.env.CURLYOS_MODEL_CHAIN ?? DEFAULT_CHAIN;
+  const raw = process.env.CURLYOS_CHAT_MODEL_CHAIN ?? DEFAULT_CHAIN;
   const chain = raw.split(",").map((s) => s.trim()).filter(Boolean);
   return [CHAT_MODEL, ...chain.filter((m) => m !== CHAT_MODEL)];
 })();
 
-let _key: string | null = null;
-
-export function openrouterKey(): string {
-  if (_key !== null) return _key;
-  if (process.env.OPENROUTER_API_KEY) return (_key = process.env.OPENROUTER_API_KEY);
-  try {
-    const env = fs.readFileSync(path.join(os.homedir(), ".hermes", ".env"), "utf8");
-    for (const line of env.split("\n")) {
-      const t = line.trim();
-      if (t.startsWith("OPENROUTER_API_KEY=")) {
-        return (_key = t.slice("OPENROUTER_API_KEY=".length).replace(/^["']|["']$/g, "").trim());
-      }
-    }
-  } catch {
-    /* no ~/.hermes/.env */
-  }
-  return (_key = "");
+export function chatKey(): string {
+  // The local bridge ignores the value; kept so any OpenAI-compatible provider
+  // works by setting one env var.
+  return process.env.CURLYOS_CHAT_API_KEY ?? "bridge";
 }

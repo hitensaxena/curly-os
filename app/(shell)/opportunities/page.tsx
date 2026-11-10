@@ -9,7 +9,6 @@ import {
   createGoal,
   getOpportunities,
   resolveOpportunity,
-  scanDiscovery,
 } from "@/lib/curlyos";
 import type {
   CreateGoalBody,
@@ -408,7 +407,6 @@ export default function OpportunitiesPage() {
   const toast = useToast();
   const [items, setItems] = useState<Opportunity[]>([]);
   const [loading, setLoading] = useState(true);
-  const [scanning, setScanning] = useState(false);
 
   const load = () => {
     setLoading(true);
@@ -423,26 +421,6 @@ export default function OpportunitiesPage() {
   useEffect(() => {
     load();
   }, []);
-
-  const handleScan = async () => {
-    setScanning(true);
-    try {
-      const result = await scanDiscovery();
-      toast.success(
-        `${result.created_count} opportunit${result.created_count !== 1 ? "ies" : "y"} found.`,
-      );
-      load();
-    } catch (err: unknown) {
-      const status = (err as { status?: number }).status;
-      if (status === 503) {
-        toast.error("LLM unavailable — try again shortly.");
-      } else {
-        toast.error("Scan failed.");
-      }
-    } finally {
-      setScanning(false);
-    }
-  };
 
   const open = items
     .filter((o) => o.status === "detected" || o.status === "scored")
@@ -462,20 +440,6 @@ export default function OpportunitiesPage() {
             : `${items.length} opportunit${items.length !== 1 ? "ies" : "y"}`
         }
         eyebrow="Discovery"
-        actions={
-          !loading ? (
-            <button
-              onClick={handleScan}
-              disabled={scanning}
-              className="rounded-lg border border-accent bg-accent/10 px-4 py-2 text-sm text-accent hover:bg-accent/20 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
-            >
-              {scanning && (
-                <span className="inline-block w-3 h-3 rounded-full border-2 border-accent/40 border-t-accent animate-spin" />
-              )}
-              {scanning ? "Scanning..." : "Scan now"}
-            </button>
-          ) : undefined
-        }
       />
 
       {loading && (
@@ -490,20 +454,10 @@ export default function OpportunitiesPage() {
           <h2 className="text-base font-semibold text-foreground mb-1">
             Nothing detected yet
           </h2>
-          <p className="text-sm text-muted mb-6 max-w-sm mx-auto">
-            Run a scan to discover opportunities from your recent activity and
-            context.
+          <p className="text-sm text-muted max-w-sm mx-auto">
+            Opportunities are detected by the weekly discovery scan (or promoted
+            from your goals). Nothing has been found yet.
           </p>
-          <button
-            onClick={handleScan}
-            disabled={scanning}
-            className="rounded-lg border border-accent bg-accent/10 px-5 py-2.5 text-sm text-accent hover:bg-accent/20 disabled:opacity-40 flex items-center gap-2 mx-auto"
-          >
-            {scanning && (
-              <span className="inline-block w-3 h-3 rounded-full border-2 border-accent/40 border-t-accent animate-spin" />
-            )}
-            {scanning ? "Scanning..." : "Scan now"}
-          </button>
         </div>
       )}
 

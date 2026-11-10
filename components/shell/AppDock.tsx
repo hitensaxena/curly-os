@@ -18,12 +18,9 @@ type NavItem = {
 
 const NAV: NavItem[] = [
   { href: "/", label: "Home", Icon: HomeIcon },
-  { href: "/projects", label: "Projects", Icon: FolderIcon },
-  { href: "/journal", label: "Journal", Icon: JournalIcon },
-  { href: "/care", label: "Care", Icon: HeartIcon },
+  { href: "/memory", label: "Memory", Icon: MemoryIcon },
+  { href: "/graph", label: "Graph", Icon: GraphIcon },
   { href: "/search", label: "Search", Icon: SearchIcon },
-  { href: "/notes", label: "Notes", Icon: NotesIcon },
-  { href: "/agent", label: "Agent", Icon: BoltIcon },
   { href: "/chat", label: "Chat", Icon: ChatIcon },
   { href: "/surface", label: "Surface", Icon: OrbIcon },
 ];
@@ -130,25 +127,23 @@ function HomeIcon(p: SVGProps<SVGSVGElement>) {
     </svg>
   );
 }
-function FolderIcon(p: SVGProps<SVGSVGElement>) {
+function MemoryIcon(p: SVGProps<SVGSVGElement>) {
   return (
     <svg {...base} {...p}>
-      <path d="M3 6h6l2 2h10v11H3z" />
+      <path d="M12 3a4 4 0 0 0-4 4c0 1.5.8 2.8 2 3.4V12h4v-1.6c1.2-.6 2-1.9 2-3.4a4 4 0 0 0-4-4z" />
+      <path d="M12 12v4" />
+      <path d="M8 16h8" />
+      <path d="M9 20h6" />
     </svg>
   );
 }
-function JournalIcon(p: SVGProps<SVGSVGElement>) {
+function GraphIcon(p: SVGProps<SVGSVGElement>) {
   return (
     <svg {...base} {...p}>
-      <path d="M5 4h12a2 2 0 0 1 2 2v14H7a2 2 0 0 1-2-2z" />
-      <path d="M9 8h6M9 12h6" />
-    </svg>
-  );
-}
-function HeartIcon(p: SVGProps<SVGSVGElement>) {
-  return (
-    <svg {...base} {...p}>
-      <path d="M12 20s-7-4.6-7-9.5A3.5 3.5 0 0 1 12 7a3.5 3.5 0 0 1 7 3.5C19 15.4 12 20 12 20z" />
+      <circle cx="6" cy="6" r="2" />
+      <circle cx="18" cy="6" r="2" />
+      <circle cx="12" cy="18" r="2" />
+      <path d="M6 8l4 8M18 8l-4 8" />
     </svg>
   );
 }
@@ -157,21 +152,6 @@ function SearchIcon(p: SVGProps<SVGSVGElement>) {
     <svg {...base} {...p}>
       <circle cx="11" cy="11" r="7" />
       <path d="m20 20-3.2-3.2" />
-    </svg>
-  );
-}
-function NotesIcon(p: SVGProps<SVGSVGElement>) {
-  return (
-    <svg {...base} {...p}>
-      <path d="M6 3h9l4 4v14H6z" />
-      <path d="M14 3v5h5M9 12h7M9 16h7" />
-    </svg>
-  );
-}
-function BoltIcon(p: SVGProps<SVGSVGElement>) {
-  return (
-    <svg {...base} {...p}>
-      <path d="M13 2 4 14h7l-1 8 9-12h-7z" />
     </svg>
   );
 }

@@ -3,32 +3,33 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { useVoice } from "@/lib/voice/VoiceContext";
 import { useToast } from "@/components/ui/ToastProvider";
 import { streamChat } from "@/lib/use-chat-stream";
 import { Markdown } from "@/components/Markdown";
-import type { SearchResponse } from "@/app/api/vault-search/route";
 
 // The OS command bar. ⌘K (or the `curly-palette-open` event) summons it. Unlike
 // the old launcher, it EXECUTES: typed prefixes route to real actions —
 //   ?  ask Curly (streams an answer inline, hands off to /chat)
-//   /  search your mind (live results)
-//   +  capture to today's journal (or the current project)
-//   !  run an agent task
+//   /  search your mind (live results from curlyos-core)
+//   +  capture to memory (a curlyos-core episode)
 //   (no prefix) blended navigate + search
 // Voice (the orb) and this bar are the same Curly; this is the typed half.
-type Mode = "default" | "ask" | "search" | "capture" | "run";
+type Mode = "default" | "ask" | "search" | "capture";
+
+// Shape of curlyos-core's GET /api/search (Postgres full-text over memories).
+type SearchResponse = {
+  items: { id: string; statement: string; score: number }[];
+};
 
 type NavItem = { id: string; label: string; hint: string; path: string };
 
 const NAV: NavItem[] = [
   { id: "home", label: "Home", hint: "/", path: "/" },
-  { id: "projects", label: "Projects", hint: "/projects", path: "/projects" },
-  { id: "journal", label: "Journal", hint: "/journal", path: "/journal" },
-  { id: "care", label: "Self-care", hint: "/care", path: "/care" },
+  { id: "memory", label: "Memory", hint: "/memory", path: "/memory" },
+  { id: "identity", label: "Identity", hint: "/identity", path: "/identity" },
+  { id: "graph", label: "Knowledge graph", hint: "/graph", path: "/graph" },
+  { id: "goals", label: "Goals", hint: "/goals", path: "/goals" },
   { id: "search", label: "Search your mind", hint: "/search", path: "/search" },
-  { id: "notes", label: "Browse notes", hint: "/notes", path: "/notes" },
-  { id: "agent", label: "Agent command center", hint: "/agent", path: "/agent" },
   { id: "chat", label: "New chat with Curly", hint: "/chat", path: "/chat" },
   { id: "surface", label: "Voice surface", hint: "/surface", path: "/surface" },
 ];
@@ -37,7 +38,6 @@ function parseQuery(raw: string): { mode: Mode; term: string } {
   if (raw.startsWith("?")) return { mode: "ask", term: raw.slice(1).trim() };
   if (raw.startsWith("/")) return { mode: "search", term: raw.slice(1).trim() };
   if (raw.startsWith("+")) return { mode: "capture", term: raw.slice(1).trim() };
-  if (raw.startsWith("!")) return { mode: "run", term: raw.slice(1).trim() };
   return { mode: "default", term: raw.trim() };
 }
 
@@ -46,12 +46,10 @@ const MODE_PILL: Record<Mode, { label: string; cls: string } | null> = {
   ask: { label: "Ask Curly", cls: "text-accent" },
   search: { label: "Search", cls: "text-accent-2" },
   capture: { label: "Capture", cls: "text-success" },
-  run: { label: "Run agent", cls: "text-accent" },
 };
 
 export function CommandPalette() {
   const router = useRouter();
-  const voice = useVoice();
   const toast = useToast();
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
@@ -116,7 +114,7 @@ export function CommandPalette() {
     const ctrl = new AbortController();
     const t = setTimeout(async () => {
       try {
-        const res = await fetch(`/api/vault-search?q=${encodeURIComponent(term)}`, { signal: ctrl.signal });
+        const res = await fetch(`/api/search?q=${encodeURIComponent(term)}&limit=8`, { signal: ctrl.signal });
         if (res.ok) setResults((await res.json()) as SearchResponse);
       } catch {
         /* aborted or failed */
@@ -140,10 +138,6 @@ export function CommandPalette() {
     close();
     router.push(path);
   }
-  function noteHref(rel: string) {
-    return `/notes/${rel.split("/").map(encodeURIComponent).join("/")}`;
-  }
-
   function runAsk(t: string) {
     if (!t || asking) return;
     setAnswer("");
@@ -168,20 +162,17 @@ export function CommandPalette() {
     if (!t || capturing) return;
     setCapturing(true);
     try {
-      const slug = voice.here?.route.match(/^\/projects\/([^/]+)/)?.[1];
-      const url = slug ? `/api/projects/${slug}/capture` : "/api/capture";
-      const payload = slug ? { content: t } : { mode: "journal", content: t };
-      const res = await fetch(url, {
+      // Capture lands in curlyos-core as an episode (memory + graph extraction).
+      const res = await fetch("/api/ingest", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ text: t, source_ref: "web:capture" }),
       });
-      const data = (await res.json().catch(() => ({}))) as { ok?: boolean; reason?: string };
-      if (res.ok && data.ok !== false) {
-        toast.success(slug ? `Captured to ${slug}` : "Captured to today's journal");
+      if (res.ok) {
+        toast.success("Captured to memory");
         close();
       } else {
-        toast.error(data.reason || "Capture failed");
+        toast.error("Capture failed");
       }
     } catch {
       toast.error("Capture failed");
@@ -221,18 +212,11 @@ export function CommandPalette() {
       node: <Row icon="⌕" iconCls="text-accent-2" label="See all results" detail={`/search?q=${term}`} kbd="↵" />,
       run: () => go(`/search?q=${encodeURIComponent(term)}`),
     });
-    for (const n of results.notes.slice(0, 8)) {
+    for (const m of results.items.slice(0, 8)) {
       actions.push({
-        key: `n-${n.rel}`,
-        node: <Row label={n.title || n.rel} detail={n.snippet ?? n.rel} muted />,
-        run: () => go(noteHref(n.rel)),
-      });
-    }
-    for (const c of results.chats.slice(0, 5)) {
-      actions.push({
-        key: `c-${c.id}`,
-        node: <Row icon="💬" label={c.first_q || c.snippet} detail={`${c.message_count} msg`} muted />,
-        run: () => go(`/chat/${c.id}`),
+        key: `m-${m.id}`,
+        node: <Row icon="✦" label={m.statement.length > 70 ? `${m.statement.slice(0, 70)}…` : m.statement} detail={`${m.score.toFixed(2)}`} muted />,
+        run: () => go(`/search?q=${encodeURIComponent(m.statement.slice(0, 60))}`),
       });
     }
   }
@@ -248,9 +232,7 @@ export function CommandPalette() {
       e.preventDefault();
       if (mode === "ask") runAsk(term);
       else if (mode === "capture") runCapture(term);
-      else if (mode === "run") {
-        if (term) go(`/agent?task=${encodeURIComponent(term)}`);
-      } else if (actions[sel]) {
+      else if (actions[sel]) {
         actions[sel].run();
       }
     }
@@ -266,9 +248,7 @@ export function CommandPalette() {
         ? "Search your mind…"
         : mode === "capture"
           ? "Capture a thought…"
-          : mode === "run"
-            ? "Describe a task for Curly…"
-            : "Ask · search · capture · go…  (try ? / + !)";
+          : "Ask · search · capture · go…  (try ? / +)";
 
   return (
     <div
@@ -329,28 +309,11 @@ export function CommandPalette() {
                 <>
                   <p className="text-subtle">{term}</p>
                   <p className="mt-2 text-xs text-muted">
-                    {capturing
-                      ? "Saving…"
-                      : `↵ to capture to ${
-                          voice.here?.route.match(/^\/projects\/([^/]+)/)?.[1] ?? "today’s journal"
-                        }`}
+                    {capturing ? "Saving…" : "↵ to capture to memory"}
                   </p>
                 </>
               ) : (
                 <p className="text-muted">Type a thought to capture…</p>
-              )}
-            </div>
-          )}
-
-          {/* RUN */}
-          {mode === "run" && (
-            <div className="px-5 py-4 text-sm">
-              {term ? (
-                <p className="text-muted">
-                  ↵ to run agent: <span className="text-foreground">“{term}”</span>
-                </p>
-              ) : (
-                <p className="text-muted">Describe a task for Curly to run…</p>
               )}
             </div>
           )}
@@ -386,7 +349,6 @@ export function CommandPalette() {
           <span><span className="text-subtle">?</span> ask</span>
           <span><span className="text-subtle">/</span> search</span>
           <span><span className="text-subtle">+</span> capture</span>
-          <span><span className="text-subtle">!</span> agent</span>
           <span className="ml-auto">↑↓ move · ↵ run · esc close</span>
         </div>
       </div>

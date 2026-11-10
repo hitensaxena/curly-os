@@ -2,13 +2,11 @@
 
 import { useEffect, useRef, useState } from "react";
 import { PageHeading } from "@/components/ui/PageHeading";
-import { useToast } from "@/components/ui/ToastProvider";
 import {
   createDecision,
   getDecisionsWithCouncil,
   getGoals,
   reviewDecision,
-  runCouncil,
 } from "@/lib/curlyos";
 import type {
   CouncilPerspective,
@@ -323,29 +321,7 @@ function DecisionCard({
   onToggleOutcome,
   onOutcomeSaved,
 }: DecisionCardProps) {
-  const toast = useToast();
-  const [councilBusy, setCouncilBusy] = useState(false);
-  const [localCouncil, setLocalCouncil] = useState<CouncilResult | null>(null);
-
-  const existingCouncil = decision.properties?.council ?? localCouncil;
-
-  const handleRunCouncil = async () => {
-    setCouncilBusy(true);
-    try {
-      const result = await runCouncil(decision.id);
-      setLocalCouncil(result);
-      toast.success("Council report ready.");
-    } catch (err: unknown) {
-      const status = (err as { status?: number }).status;
-      if (status === 503) {
-        toast.error("LLM unavailable — try again shortly.");
-      } else {
-        toast.error("Council failed.");
-      }
-    } finally {
-      setCouncilBusy(false);
-    }
-  };
+  const existingCouncil = decision.properties?.council ?? null;
 
   return (
     <div className="rounded-lg border border-border bg-surface p-4">
@@ -379,18 +355,6 @@ function DecisionCard({
               className="rounded border border-border px-2 py-0.5 text-[10px] text-muted hover:text-accent hover:border-accent/40"
             >
               record outcome
-            </button>
-          )}
-          {!existingCouncil && (
-            <button
-              onClick={handleRunCouncil}
-              disabled={councilBusy}
-              className="rounded border border-border px-2 py-0.5 text-[10px] text-muted hover:text-purple-400 hover:border-purple-400/40 disabled:opacity-40 flex items-center gap-1"
-            >
-              {councilBusy && (
-                <span className="inline-block w-2.5 h-2.5 rounded-full border border-purple-400/40 border-t-purple-400 animate-spin" />
-              )}
-              {councilBusy ? "Consulting..." : "Council"}
             </button>
           )}
         </div>
@@ -434,12 +398,7 @@ function DecisionCard({
         />
       )}
 
-      {existingCouncil && (
-        <CouncilReport
-          council={existingCouncil}
-          defaultOpen={localCouncil !== null}
-        />
-      )}
+      {existingCouncil && <CouncilReport council={existingCouncil} />}
     </div>
   );
 }

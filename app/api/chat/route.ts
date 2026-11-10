@@ -1,8 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { CORE_URL } from "@/lib/core";
-import { CHAT_MODEL_CHAIN, OPENROUTER_URL, openrouterKey } from "@/lib/openrouter";
+import { CHAT_COMPLETIONS_URL, CHAT_MODEL_CHAIN, chatKey } from "@/lib/openrouter";
 import { ensureDataDir, getChat, recordTurn } from "@/lib/chats-db";
-import { searchVaultContent } from "@/lib/vault-fs";
 
 export const runtime = "nodejs";
 
@@ -67,25 +66,13 @@ async function retrieveContext(
       }
     }
   } catch {
-    /* recall slow/unavailable — identity + notes still ground the reply */
-  }
-
-  // 3. A few vault note snippets matching the question.
-  let vaultText = "";
-  try {
-    for (const n of await searchVaultContent(question, 5)) {
-      vaultText += `### ${n.rel}\n${n.snippet}\n\n`;
-      chunks.push({ kind: "note", path: n.rel, title: n.rel.split("/").pop() ?? n.rel, distance: null });
-    }
-  } catch {
-    /* ripgrep/vault unavailable */
+    /* recall slow/unavailable — identity still grounds the reply */
   }
 
   const block =
     [
       identityText ? `## Who Hiten is (identity facts)\n${identityText}` : "",
       memText ? `## Relevant memory\n${memText}` : "",
-      vaultText ? `## From notes (vault)\n${vaultText}` : "",
     ]
       .filter(Boolean)
       .join("\n") || "(no relevant context retrieved)";
@@ -151,9 +138,9 @@ export async function POST(request: Request) {
 
       try {
         send("retrieval", { chunks });
-        const key = openrouterKey();
+        const key = chatKey();
         if (!key) {
-          send("error", { message: "OPENROUTER_API_KEY not configured" });
+          send("error", { message: "No chat provider configured" });
           return close();
         }
 
@@ -166,7 +153,7 @@ export async function POST(request: Request) {
         for (const model of CHAT_MODEL_CHAIN) {
           if (upstream.signal.aborted) break;
           try {
-            const r = await fetch(OPENROUTER_URL, {
+            const r = await fetch(CHAT_COMPLETIONS_URL, {
               method: "POST",
               headers: {
                 "Content-Type": "application/json",
@@ -186,7 +173,7 @@ export async function POST(request: Request) {
               resp = r;
               break;
             }
-            lastErr = `openrouter ${r.status} on ${model}: ${(await r.text().catch(() => "")).slice(0, 150)}`;
+            lastErr = `chat ${r.status} on ${model}: ${(await r.text().catch(() => "")).slice(0, 150)}`;
           } catch (e) {
             lastErr = `${model}: ${e instanceof Error ? e.message : String(e)}`;
           }

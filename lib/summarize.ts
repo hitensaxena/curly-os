@@ -1,43 +1,44 @@
 // Lazy LLM summarizer for chats. The hooks in chats-db (chatsNeedingResummary /
-// setSummary) existed but nothing ran them; this fills that gap. Spawns the
-// `claude` CLI in print mode (-p, Max-subscription auth, no API key) and writes
-// a one-line summary. Entirely failure-safe — any spawn error just skips the
-// chat, so a flaky CLI never breaks a page load.
-import { spawn } from "node:child_process";
-import path from "node:path";
-import { HOME } from "@/lib/paths";
+// setSummary) existed but nothing ran them; this fills that gap. Writes a
+// one-line summary per chat.
+//
+// Goes through the same OpenCode Go bridge as /api/chat (lib/openrouter.ts)
+// rather than spawning a `claude` CLI — the CLI is not on the launchd PATH and
+// was not installed at the path this used to hardcode, so summaries silently
+// never ran. Entirely failure-safe: any error just skips the chat.
+import {
+  CHAT_COMPLETIONS_URL,
+  CHAT_MODEL_CHAIN,
+  chatKey,
+} from "@/lib/openrouter";
 import { chatsNeedingResummary, getChat, setSummary } from "@/lib/chats-db";
 
-const CLAUDE_BIN = path.join(HOME, ".local", "bin", "claude");
-
-function runClaude(prompt: string, timeoutMs = 60_000): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const proc = spawn(CLAUDE_BIN, ["-p", prompt], {
-      cwd: HOME,
-      stdio: ["ignore", "pipe", "pipe"],
+async function complete(prompt: string, timeoutMs = 60_000): Promise<string> {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const res = await fetch(CHAT_COMPLETIONS_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${chatKey()}`,
+      },
+      body: JSON.stringify({
+        model: CHAT_MODEL_CHAIN[0],
+        messages: [{ role: "user", content: prompt }],
+        stream: false,
+        max_tokens: 256,
+      }),
+      signal: ctrl.signal,
     });
-    let out = "";
-    let err = "";
-    const timer = setTimeout(() => {
-      try {
-        proc.kill("SIGTERM");
-      } catch {
-        /* already gone */
-      }
-      reject(new Error("claude timeout"));
-    }, timeoutMs);
-    proc.stdout.on("data", (d: Buffer) => (out += d.toString("utf8")));
-    proc.stderr.on("data", (d: Buffer) => (err += d.toString("utf8")));
-    proc.on("error", (e) => {
-      clearTimeout(timer);
-      reject(e);
-    });
-    proc.on("exit", (code) => {
-      clearTimeout(timer);
-      if (code === 0) resolve(out.trim());
-      else reject(new Error(`claude exit ${code}: ${err.slice(0, 200)}`));
-    });
-  });
+    if (!res.ok) throw new Error(`bridge ${res.status}`);
+    const json = (await res.json()) as {
+      choices?: { message?: { content?: string } }[];
+    };
+    return (json.choices?.[0]?.message?.content ?? "").trim();
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 function transcript(messages: { role: string; content: string }[], cap = 6000): string {
@@ -64,7 +65,7 @@ export async function summarizePendingChats(batch = 3): Promise<{ summarized: nu
       "specific, no preamble or quotes:\n\n" +
       transcript(chat.messages);
     try {
-      const raw = await runClaude(prompt);
+      const raw = await complete(prompt);
       const summary = raw.split("\n")[0].slice(0, 200).trim();
       if (summary) {
         setSummary(id, summary);
