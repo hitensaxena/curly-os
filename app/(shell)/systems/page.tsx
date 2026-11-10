@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { getSystems, trigger } from "@/lib/curlyos";
 import type {
   EngineTriggerResult,
@@ -38,6 +39,18 @@ function whenLabel(iso: string | null | undefined): string {
   if (!iso) return "never";
   const ms = new Date(iso).getTime();
   return Number.isNaN(ms) ? "—" : relTime(ms);
+}
+
+// relTime() is past-only; a next_due is in the future and needs its own label.
+function dueLabel(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  const ms = new Date(iso).getTime();
+  if (Number.isNaN(ms)) return "—";
+  const m = Math.round((ms - Date.now()) / 60000);
+  if (m <= 0) return "now";
+  if (m < 60) return `in ${m}m`;
+  const h = Math.round(m / 60);
+  return h < 24 ? `in ${h}h` : `in ${Math.round(h / 24)}d`;
 }
 
 function whenAbsolute(iso: string | null | undefined): string {
@@ -105,6 +118,47 @@ export default function SystemsPage() {
     <div className="mx-auto w-full max-w-5xl px-5 py-8 sm:px-8">
       <h1 className="text-2xl font-bold text-foreground mb-1">Systems</h1>
       <p className="text-sm text-muted mb-6">Live status of every CurlyOS subsystem and autonomous engine</p>
+
+      {/* Cognitive heartbeat — the background scheduler that drives every engine */}
+      {data?.scheduler && (
+        <section className="mb-8">
+          <h2 className="text-sm font-semibold text-foreground mb-2">Background jobs</h2>
+          <Link
+            href="/logs?tab=jobs"
+            className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg border border-border bg-surface px-4 py-3 transition-colors hover:border-accent"
+          >
+            <span className="flex items-center gap-2">
+              <span
+                className={`inline-block h-2 w-2 rounded-full ${
+                  !data.scheduler.running
+                    ? "bg-red-400"
+                    : data.scheduler.failing.length > 0
+                      ? "bg-yellow-400"
+                      : "bg-green-400"
+                }`}
+              />
+              <span className="text-sm font-medium text-foreground">
+                {data.scheduler.running ? "Scheduler running" : "Scheduler stopped"}
+              </span>
+            </span>
+            <span className="text-xs text-muted tabular-nums">
+              {data.scheduler.jobs} {data.scheduler.jobs === 1 ? "job" : "jobs"}
+            </span>
+            <span
+              className={`text-xs tabular-nums ${
+                data.scheduler.failing.length > 0 ? "text-yellow-400" : "text-muted"
+              }`}
+            >
+              {data.scheduler.failing.length} failing
+              {data.scheduler.failing.length > 0 ? `: ${data.scheduler.failing.join(", ")}` : ""}
+            </span>
+            <span className="text-xs text-muted" title={whenAbsolute(data.scheduler.next_due)}>
+              next due {dueLabel(data.scheduler.next_due)}
+            </span>
+            <span className="ml-auto text-xs text-accent">runs →</span>
+          </Link>
+        </section>
+      )}
 
       {/* Infrastructure */}
       <section className="mb-8">

@@ -16,6 +16,9 @@ import type {
   ResolveOpportunityBody,
   ResolveOpportunityResult,
   SystemsStatus,
+  SchedulerSnapshot,
+  AgentRunsResponse,
+  JobTriggerResult,
 } from "@/lib/curlyos-types";
 
 async function getJSON<T>(path: string): Promise<T> {
@@ -173,4 +176,26 @@ export async function resolveOpportunity(
     throw Object.assign(new Error(msg), { status: r.status });
   }
   return r.json() as Promise<ResolveOpportunityResult>;
+}
+
+// --- Background jobs ---------------------------------------------------------
+export function getScheduler(): Promise<SchedulerSnapshot> {
+  return getJSON<SchedulerSnapshot>("/api/scheduler");
+}
+
+export function getAgentRuns(
+  opts: { limit?: number; offset?: number; job?: string; status?: string } = {},
+): Promise<AgentRunsResponse> {
+  const q = new URLSearchParams();
+  q.set("limit", String(opts.limit ?? 50));
+  q.set("offset", String(opts.offset ?? 0));
+  // The core filters on the full agent string ("workflow:<job>").
+  if (opts.job) q.set("agent", `workflow:${opts.job}`);
+  if (opts.status) q.set("status", opts.status);
+  return getJSON<AgentRunsResponse>(`/api/agent-runs?${q.toString()}`);
+}
+
+export async function runJobNow(name: string): Promise<JobTriggerResult> {
+  const r = await fetch(`/api/scheduler/run/${encodeURIComponent(name)}`, { method: "POST" });
+  return r.json() as Promise<JobTriggerResult>;
 }

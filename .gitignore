@@ -3,3 +3,6 @@
 /.next/
 .env*.local
 /tsconfig.tsbuildinfo
+
+# macOS
+.DS_Store

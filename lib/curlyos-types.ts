@@ -214,11 +214,21 @@ export interface SystemEngine {
   error?: string;
 }
 
+// One-line summary of the background scheduler (`_scheduler_summary` in
+// api_server) — /api/scheduler has the per-job detail.
+export interface SchedulerSummary {
+  running: boolean;
+  jobs: number;
+  failing: string[];
+  next_due?: string | null;
+}
+
 export interface SystemsStatus {
   timestamp: string;
   infrastructure: SystemInfra[];
   stats: Stats;
   engines: SystemEngine[];
+  scheduler?: SchedulerSummary | null;
 }
 
 // Autonomous-trigger endpoints return an opaque result dict (or {error,...}).
@@ -314,137 +324,6 @@ export interface CreateDecisionBody {
   review_at?: string;
 }
 
-// --- Agent Runs --------------------------------------------------------------
-
-export type AgentRunStatus = "running" | "parked" | "completed" | "failed" | "cancelled";
-
-export interface AgentRunResult {
-  summary?: string;
-  steps?: number;
-  denied?: string[];
-}
-
-export interface AgentRun {
-  id: string;
-  agent: string;
-  task: string;
-  status: AgentRunStatus;
-  result: AgentRunResult | null;
-  error: string | null;
-  created_at: string;
-  finished_at: string | null;
-}
-
-export interface AgentRunAction {
-  id: string;
-  kind: string;
-  payload: {
-    tool: string;
-    args: Record<string, unknown>;
-    cursor?: string;
-    why?: string;
-  };
-  created_at: string;
-  observation: Record<string, unknown> | null;
-}
-
-export interface AgentRunToolCall {
-  id: string;
-  tool: string;
-  args: Record<string, unknown>;
-  entry_hash: string;
-  created_at: string;
-}
-
-export interface AgentRunApproval {
-  apv_id: string;
-  action_class: string;
-  payload: {
-    tool?: string;
-    args?: Record<string, unknown>;
-    why?: string;
-    cursor?: string;
-  } | null;
-  state: string;
-  origin: string;
-  created_at: string;
-  decided_at: string | null;
-}
-
-export interface AgentRunDetail extends AgentRun {
-  actions: AgentRunAction[];
-  tool_calls: AgentRunToolCall[];
-  approvals: AgentRunApproval[];
-}
-
-export interface CreateRunBody {
-  task: string;
-}
-
-export interface CreateRunResult {
-  run_id: string;
-  status: string;
-}
-
-export interface RunActionResult {
-  run_id: string;
-  status: string;
-}
-
-// --- Approvals ---------------------------------------------------------------
-
-export type ApprovalOrigin = "agent" | "human";
-
-export interface PendingApproval {
-  apv_id: string;
-  run_id: string | null;
-  origin: ApprovalOrigin;
-  action_class: string;
-  payload: {
-    tool?: string;
-    args?: Record<string, unknown>;
-    why?: string;
-    cursor?: string;
-  } | null;
-  expires_at: string | null;
-  created_at: string;
-}
-
-export interface ApprovalActionResult {
-  apv_id: string;
-  state: string;
-  run_id: string | null;
-  action_class: string;
-  resumed?: boolean;
-}
-
-// --- Simulation Runs (extended) ----------------------------------------------
-
-export interface SimScenarioOutcome {
-  scenarios: Record<string, number>;
-  implications: string;
-}
-
-export interface SimRunExtended {
-  id: string;
-  scope: string | null;
-  question: string;
-  world_model_id: string | null;
-  status: string;
-  epistemic_status: string;
-  outcome_distribution: SimScenarioOutcome | Record<string, number> | unknown[] | null;
-  parameters: Record<string, unknown> | null;
-  created_at: string;
-  completed_at: string | null;
-}
-
-export interface SimExecuteResult {
-  sim_id: string;
-  scenarios: number;
-  outcome: Record<string, number>;
-  implications: string;
-}
-
 // --- Opportunities -----------------------------------------------------------
 
 export type OpportunityStatus = "detected" | "scored" | "accepted" | "rejected" | "expired";
@@ -476,12 +355,6 @@ export interface ResolveOpportunityResult {
   resolution: string;
 }
 
-export interface DiscoveryScanResult {
-  proposed: number;
-  created: string[];
-  created_count: number;
-}
-
 // --- Decision Council --------------------------------------------------------
 
 export interface CouncilPerspective {
@@ -502,89 +375,52 @@ export interface DecisionWithCouncil extends Decision {
   };
 }
 
-// --- SSE Events --------------------------------------------------------------
-
-export interface SseEvent {
-  seq: number;
-  type: string;
-  subject: string | null;
-  data: Record<string, unknown>;
-  at: string;
-}
-
-// --- Evolution ---------------------------------------------------------------
-
-export type PromptVersionStatus = "candidate" | "active" | "held" | "retired";
-export type EvalDecision = "promote" | "hold";
-
-export interface PromptVersion {
-  id: string;
+// --- Background jobs (shared/scheduler.py) -----------------------------------
+export interface ScheduledJob {
   name: string;
-  version: number;
-  status: PromptVersionStatus;
-  proposed_by: string | null;
-  notes: string | null;
-  created_at: string;
-  activated_at: string | null;
-  pass_rate: number | null;
-  eval_decision: EvalDecision | null;
-  approval_id: string | null;
+  cadence: string;
+  enabled: boolean;
+  next_due: string | null;
+  last_fired: string | null;
+  last_status: string;   // never | completed | failed | skipped_locked | skipped_period_done
+  last_error: string | null;
+  last_run_id: string | null;
+  last_duration_ms: number | null;
+  consecutive_failures: number;
 }
 
-export type EvolutionEventType =
-  | "evolution.candidate.proposed"
-  | "evolution.eval.completed"
-  | "evolution.candidate.held"
-  | "evolution.prompt.activated";
-
-export interface EvolutionTimelineItem {
-  seq: number;
-  type: EvolutionEventType;
-  subject: string | null;
-  data: Record<string, unknown>;
-  at: string;
+export interface SchedulerSnapshot {
+  running: boolean;
+  reason?: string;
+  started_at?: string | null;
+  history_error?: string;
+  jobs: ScheduledJob[];
 }
 
-export interface EvalTaskDetail {
-  task: string;
-  pass: boolean;
-  why: string;
+export interface AgentRun {
+  run_id: string;
+  agent: string;
+  job: string | null;
+  task: string | null;
+  status: string;
+  error: string | null;
+  started_at: string | null;
+  finished_at: string | null;
+  duration_ms: number | null;
 }
 
-export interface EvalResult {
-  pmt_id: string;
-  evr_id: string;
-  pass_rate: number;
-  baseline: number;
-  verdict: "pass" | "held";
-  details: EvalTaskDetail[];
+export interface AgentRunsResponse {
+  items: AgentRun[];
+  count: number;
+  total: number;
+  by_status: Record<string, number>;
 }
 
-export interface ActivateResult {
-  pmt_id: string;
-  name: string;
-  version: number;
-  status: "active";
-  pdp_reason: string | null;
-}
-
-export interface ProposePromptBody {
-  name: string;
-  content: string;
-  notes?: string;
-}
-
-export interface ProposePromptResult {
-  id: string;
-  name: string;
-  version: number;
-  status: PromptVersionStatus;
-}
-
-export interface CreateApprovalResult {
-  apv_id: string;
-  action_class: string;
-  state: string;
-  payload: Record<string, unknown>;
-  created_at: string;
+export interface JobTriggerResult {
+  job: string;
+  status: string;
+  run_id: string | null;
+  duration_ms: number | null;
+  error: string | null;
+  result: unknown;
 }
