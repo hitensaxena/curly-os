@@ -57,17 +57,27 @@ export default function Dashboard() {
   const [search, setSearch] = useState("");
   const [results, setResults] = useState<{ id: string; statement: string; score: number }[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   useEffect(() => {
-    Promise.all([
-      fetch(`${API}/api/stats`).then((r) => r.json()),
-      fetch(`${API}/api/events?limit=10`).then((r) => r.json()),
-      fetch(`${API}/api/stats/composition`).then((r) => r.ok ? r.json() : null).catch(() => null),
-    ]).then(([s, e, c]) => {
-      setStats(s);
-      setEvents(e.items || []);
-      setComposition(c);
-      setLoading(false);
-    });
+    // Every call is checked: an unchecked fetch left the dashboard on
+    // "Loading..." forever when the core was down, which is indistinguishable
+    // from a healthy but empty system.
+    const get = (path: string) =>
+      fetch(`${API}${path}`, { signal: AbortSignal.timeout(20_000) }).then((r) => {
+        if (!r.ok) throw new Error(`${path} → ${r.status}`);
+        return r.json();
+      });
+    Promise.all([get("/api/stats"), get("/api/events?limit=10"), get("/api/stats/composition")])
+      .then(([s, e, c]) => {
+        setStats(s);
+        setEvents(e?.items ?? []);
+        setComposition(c ?? null);
+        setLoading(false);
+      })
+      .catch((err: unknown) => {
+        setError(err instanceof Error ? err.message : String(err));
+        setLoading(false);
+      });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
@@ -81,6 +91,13 @@ export default function Dashboard() {
   }, [search]);
 
   if (loading) return <div className="flex items-center justify-center h-64 text-muted">Loading...</div>;
+  if (error)
+    return (
+      <div className="flex flex-col items-center justify-center h-64 gap-2 text-center">
+        <p className="text-sm text-foreground">Core API unreachable</p>
+        <p className="text-xs text-muted font-mono">{error}</p>
+      </div>
+    );
 
   const statCards = [
     { label: "Episodes",  value: stats?.episodes ?? 0,          sub: "provenance anchors" },

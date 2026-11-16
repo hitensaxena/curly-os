@@ -6,17 +6,33 @@ const coreUrl = new URL(CORE_URL);
 const API_HOST = coreUrl.hostname;
 const API_PORT = Number(coreUrl.port) || 80;
 
-function apiRequest(method: string, path: string, body?: string): Promise<{ status: number; data: unknown }> {
+// The core can be slow on aggregating routes (systems, observability/overview
+// walk several tables). Without a deadline a hung core holds the browser
+// request open forever, which reads as "the page is still loading".
+const TIMEOUT_MS = Number(process.env.CURLYOS_PROXY_TIMEOUT_MS) || 30_000;
+
+function apiRequest(
+  method: string,
+  path: string,
+  body?: string,
+): Promise<{ status: number; data: unknown }> {
   return new Promise((resolve, reject) => {
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    // The core's bearer gate is dormant unless CURLYOS_API_TOKEN is set. Read it
+    // here so arming the core does not silently break every page.
+    const token = process.env.CURLYOS_API_TOKEN?.trim();
+    if (token) headers.Authorization = `Bearer ${token}`;
+
     const options: http.RequestOptions = {
       hostname: API_HOST,
       port: API_PORT,
       path: `/api/${path}`,
       method,
-      headers: { "Content-Type": "application/json" },
+      headers,
+      timeout: TIMEOUT_MS,
     };
     const req = http.request(options, (res) => {
-      let chunks: Buffer[] = [];
+      const chunks: Buffer[] = [];
       res.on("data", (c: Buffer) => chunks.push(c));
       res.on("end", () => {
         const text = Buffer.concat(chunks).toString();
@@ -27,6 +43,9 @@ function apiRequest(method: string, path: string, body?: string): Promise<{ stat
         }
       });
     });
+    req.on("timeout", () => {
+      req.destroy(new Error(`core did not respond within ${TIMEOUT_MS}ms`));
+    });
     req.on("error", (e) => {
       console.error("API proxy error:", e.message);
       reject(e);
@@ -36,61 +55,44 @@ function apiRequest(method: string, path: string, body?: string): Promise<{ stat
   });
 }
 
-export async function GET(
+async function forward(
   request: NextRequest,
-  { params }: { params: Promise<{ path: string[] }> }
+  paramsPromise: Promise<{ path: string[] }>,
+  method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE",
 ) {
-  const { path } = await params;
+  const { path } = await paramsPromise;
   const url = new URL(request.url);
   const apiPath = path.join("/") + url.search;
-  console.log(`[proxy] GET /api/${apiPath}`);
   try {
-    const { status, data } = await apiRequest("GET", apiPath);
-    console.log(`[proxy] → ${status}`);
+    const body =
+      method === "GET" || method === "DELETE" ? undefined : await request.text();
+    const { status, data } = await apiRequest(method, apiPath, body);
     return NextResponse.json(data, { status });
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e);
-    console.error(`[proxy] error:`, msg);
+    console.error(`[proxy] ${method} /api/${apiPath}: ${msg}`);
     return NextResponse.json({ error: msg }, { status: 502 });
   }
 }
 
-export async function POST(
-  request: NextRequest,
-  { params }: { params: Promise<{ path: string[] }> }
-) {
-  const { path } = await params;
-  const url = new URL(request.url);
-  const apiPath = path.join("/") + url.search;
-  console.log(`[proxy] POST /api/${apiPath}`);
-  try {
-    const body = await request.text();
-    const { status, data } = await apiRequest("POST", apiPath, body);
-    console.log(`[proxy] → ${status}`);
-    return NextResponse.json(data, { status });
-  } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : String(e);
-    console.error(`[proxy] error:`, msg);
-    return NextResponse.json({ error: msg }, { status: 502 });
-  }
+type Ctx = { params: Promise<{ path: string[] }> };
+
+export async function GET(request: NextRequest, ctx: Ctx) {
+  return forward(request, ctx.params, "GET");
 }
 
-export async function PATCH(
-  request: NextRequest,
-  { params }: { params: Promise<{ path: string[] }> }
-) {
-  const { path } = await params;
-  const url = new URL(request.url);
-  const apiPath = path.join("/") + url.search;
-  console.log(`[proxy] PATCH /api/${apiPath}`);
-  try {
-    const body = await request.text();
-    const { status, data } = await apiRequest("PATCH", apiPath, body);
-    console.log(`[proxy] → ${status}`);
-    return NextResponse.json(data, { status });
-  } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : String(e);
-    console.error(`[proxy] error:`, msg);
-    return NextResponse.json({ error: msg }, { status: 502 });
-  }
+export async function POST(request: NextRequest, ctx: Ctx) {
+  return forward(request, ctx.params, "POST");
+}
+
+export async function PUT(request: NextRequest, ctx: Ctx) {
+  return forward(request, ctx.params, "PUT");
+}
+
+export async function PATCH(request: NextRequest, ctx: Ctx) {
+  return forward(request, ctx.params, "PATCH");
+}
+
+export async function DELETE(request: NextRequest, ctx: Ctx) {
+  return forward(request, ctx.params, "DELETE");
 }

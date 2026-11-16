@@ -53,9 +53,19 @@ export default function EpisodesPage() {
     if (modality) params.set("modality", modality);
     fetch(`${API}/api/episodes?${params}`)
       .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) throw new Error(`episodes → ${r.status}`);
+        return r.json();
+      })
       .then((d) => {
         setEpisodes(d.items || []);
-        setTotal(d.count || 0);
+        // `count` is the page size; `total` is the number of matching episodes.
+        setTotal(typeof d.total === "number" ? d.total : (d.items || []).length);
+        setLoading(false);
+      })
+      .catch(() => {
+        setEpisodes([]);
+        setTotal(0);
         setLoading(false);
       });
   };

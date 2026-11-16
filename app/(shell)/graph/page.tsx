@@ -114,11 +114,19 @@ export default function GraphPage() {
   const fgRef = useRef<any>(null);
 
   useEffect(() => {
-    fetch(`${API}/api/graph?limit=50000`)
-      .then((r) => r.json())
+    fetch(`${API}/api/graph?limit=50000`, { signal: AbortSignal.timeout(60_000) })
+      .then((r) => {
+        if (!r.ok) throw new Error(`graph → ${r.status}`);
+        return r.json();
+      })
       .then((d) => {
         setNodes(d.nodes || []);
         setLinks(d.links || []);
+        setLoading(false);
+      })
+      .catch(() => {
+        setNodes([]);
+        setLinks([]);
         setLoading(false);
       });
   }, []);

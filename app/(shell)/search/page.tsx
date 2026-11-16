@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
+import { useSearchParams } from "next/navigation";
 
 const API = "";
 
@@ -100,7 +101,8 @@ function FilterChip({
 }
 
 export default function SearchPage() {
-  const [q, setQ] = useState("");
+  const searchParams = useSearchParams();
+  const [q, setQ] = useState(searchParams.get("q") ?? "");
   const [rawResults, setRawResults] = useState<SearchResult[]>([]);
   const [rawTotal, setRawTotal] = useState(0);
   const [loading, setLoading] = useState(false);

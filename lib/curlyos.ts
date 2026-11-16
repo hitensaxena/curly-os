@@ -21,8 +21,23 @@ import type {
   JobTriggerResult,
 } from "@/lib/curlyos-types";
 
+// A failed request used to resolve to whatever JSON the proxy returned, so a
+// 502 or a 401 surfaced as an empty list or a silently dead button. Callers
+// that want to show an error can catch; callers that don't get a real throw
+// instead of invented empty data.
 async function getJSON<T>(path: string): Promise<T> {
-  const r = await fetch(path);
+  const r = await fetch(path, { signal: AbortSignal.timeout(30_000) });
+  if (!r.ok) {
+    let detail = r.statusText;
+    try {
+      const body = await r.json();
+      if (body?.error) detail = String(body.error);
+      else if (body?.detail) detail = String(body.detail);
+    } catch {
+      /* non-JSON error body; keep the status text */
+    }
+    throw new Error(`${path} → ${r.status} ${detail}`);
+  }
   return r.json() as Promise<T>;
 }
 
@@ -57,7 +72,11 @@ export async function trigger(
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
+    signal: AbortSignal.timeout(120_000),
   });
+  if (!r.ok) {
+    throw new Error(`${path} → ${r.status} ${r.statusText}`);
+  }
   return r.json() as Promise<EngineTriggerResult>;
 }
 
@@ -130,16 +149,18 @@ export async function createDecision(
 export async function reviewDecision(
   id: string,
   outcome: string,
-): Promise<Decision> {
+): Promise<{ decision_id: string; outcome_id: string; status: string }> {
   const r = await fetch(
     `/api/decisions/${encodeURIComponent(id)}/review`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ outcome }),
+      signal: AbortSignal.timeout(30_000),
     },
   );
-  return r.json() as Promise<Decision>;
+  if (!r.ok) throw new Error(`review ${id} → ${r.status}`);
+  return r.json() as Promise<{ decision_id: string; outcome_id: string; status: string }>;
 }
 
 export function getDecisionsWithCouncil(
