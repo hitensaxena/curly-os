@@ -1,10 +1,24 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import {
+  ContradictionsPanel,
+  CuriosityPanel,
+  IntentionsPanel,
+  WorkingSetPanel,
+} from "@/components/cognition/OperablePanels";
 
 const API = "";
 
-type Tab = "meta" | "reflection" | "attention" | "narrative";
+type Tab =
+  | "meta"
+  | "reflection"
+  | "attention"
+  | "narrative"
+  | "working-set"
+  | "contradictions"
+  | "intentions"
+  | "curiosity";
 
 export default function CognitionPage() {
   const [tab, setTab] = useState<Tab>("meta");
@@ -56,9 +70,13 @@ export default function CognitionPage() {
   // Deep-link to a tab via #hash (e.g. /cognition#attention from the Self view).
   useEffect(() => {
     const h = typeof window !== "undefined" ? window.location.hash.replace("#", "") : "";
-    if (h === "meta" || h === "reflection" || h === "attention" || h === "narrative") {
+    const known = [
+      "meta", "reflection", "attention", "narrative",
+      "working-set", "contradictions", "intentions", "curiosity",
+    ];
+    if (known.includes(h)) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
-      setTab(h);
+      setTab(h as Tab);
     }
   }, []);
 
@@ -67,6 +85,10 @@ export default function CognitionPage() {
     { id: "reflection", label: "Reflection" },
     { id: "attention", label: "Attention" },
     { id: "narrative", label: "Narrative" },
+    { id: "working-set", label: "Working set" },
+    { id: "contradictions", label: "Contradictions" },
+    { id: "intentions", label: "Intentions" },
+    { id: "curiosity", label: "Curiosity" },
   ];
 
   if (loading) return <div className="flex items-center justify-center h-64 text-muted">Loading...</div>;
@@ -77,7 +99,7 @@ export default function CognitionPage() {
       <p className="text-sm text-muted mb-6">Meta-cognition, reflection, attention, narrative</p>
 
       {/* Tabs */}
-      <div className="flex gap-1 mb-6 border-b border-border">
+      <div className="flex gap-1 mb-6 border-b border-border overflow-x-auto">
         {tabs.map((t) => (
           <button key={t.id} onClick={() => setTab(t.id)}
             className={`px-4 py-2 text-sm border-b-2 transition-colors ${tab === t.id ? "border-accent text-foreground" : "border-transparent text-muted hover:text-foreground"}`}>
@@ -85,6 +107,11 @@ export default function CognitionPage() {
           </button>
         ))}
       </div>
+
+      {tab === "working-set" && <WorkingSetPanel />}
+      {tab === "contradictions" && <ContradictionsPanel />}
+      {tab === "intentions" && <IntentionsPanel />}
+      {tab === "curiosity" && <CuriosityPanel />}
 
       {/* Meta-Cognition */}
       {tab === "meta" && (
