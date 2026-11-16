@@ -47,7 +47,6 @@ export default function LibraryPage() {
   const [rows, setRows] = useState<Row[]>([]);
   const [total, setTotal] = useState<number | null>(null);
   const [page, setPage] = useState(0);
-  const [view, setView] = useState<"list" | "graph">("list");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -80,7 +79,7 @@ export default function LibraryPage() {
             href: `/library/${encodeURIComponent(m.id)}`,
           })),
         );
-        setTotal(null);
+        setTotal(typeof d.total === "number" ? d.total : null);
       } else if (facet === "identity") {
         const d = await get(`/api/identity?scope=user:usr_hiten`);
         const items = (d.items ?? []) as any[];
@@ -206,12 +205,12 @@ export default function LibraryPage() {
         )}
 
         {facet === "entities" && (
-          <button
-            onClick={() => setView(view === "list" ? "graph" : "list")}
+          <Link
+            href="/graph"
             className="rounded border border-border px-3 py-1.5 text-xs text-muted hover:border-accent hover:text-foreground"
           >
-            {view === "list" ? "graph view" : "list view"}
-          </button>
+            open graph →
+          </Link>
         )}
       </div>
 
@@ -221,15 +220,7 @@ export default function LibraryPage() {
         </p>
       )}
 
-      {facet === "entities" && view === "graph" ? (
-        <div className="rounded border border-border bg-surface">
-          <iframe
-            src="/graph?embed=1"
-            title="Knowledge graph"
-            className="h-[70vh] w-full rounded"
-          />
-        </div>
-      ) : (
+      {(
         <>
           <div className="divide-y divide-border rounded-lg border border-border bg-surface">
             {rows.map((row) => {

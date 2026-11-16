@@ -12,6 +12,7 @@ export type NavGroup = { label: string; items: NavItem[] };
 export const NAV: NavItem[] = [
   { href: "/", label: "Ask" },
   { href: "/library", label: "Library" },
+  { href: "/graph", label: "Graph" },
   { href: "/think", label: "Think" },
   { href: "/system", label: "System" },
   { href: "/chat", label: "Chat" },

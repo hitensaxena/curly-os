@@ -3,11 +3,12 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-// Four surfaces. Everything the app can show lives inside one of them; there is
+// Five surfaces. Everything the app can show lives inside one of them; there is
 // no second navigation model to drift out of sync.
 const ITEMS = [
   { href: "/", label: "Ask", hint: "Search your memory" },
   { href: "/library", label: "Library", hint: "Browse everything you hold" },
+  { href: "/graph", label: "Graph", hint: "Visualise the knowledge graph" },
   { href: "/think", label: "Think", hint: "What needs your attention" },
   { href: "/system", label: "System", hint: "Health, engines, settings" },
 ];
