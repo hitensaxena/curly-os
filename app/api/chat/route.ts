@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { CORE_URL } from "@/lib/core";
+import { CORE_SCOPE, CORE_URL, coreHeaders, ingestToCore } from "@/lib/core";
 import { CHAT_COMPLETIONS_URL, CHAT_MODEL_CHAIN, chatKey } from "@/lib/openrouter";
 import { ensureDataDir, getChat, recordTurn } from "@/lib/chats-db";
 
@@ -31,7 +31,10 @@ async function retrieveContext(
   // which semantic recall does not search.
   let identityText = "";
   try {
-    const r = await fetch(`${CORE_URL}/api/identity`, { signal: AbortSignal.timeout(6000) });
+    const r = await fetch(
+      `${CORE_URL}/api/identity?scope=${encodeURIComponent(CORE_SCOPE)}`,
+      { headers: coreHeaders(), signal: AbortSignal.timeout(6000) },
+    );
     if (r.ok) {
       const d = (await r.json()) as { items?: { predicate?: string; object?: unknown }[] };
       for (const f of d.items ?? []) {
@@ -47,8 +50,8 @@ async function retrieveContext(
   try {
     const r = await fetch(`${CORE_URL}/api/recall`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ query: question, k: 6 }),
+      headers: coreHeaders(),
+      body: JSON.stringify({ query: question, k: 6, scope: CORE_SCOPE }),
       signal: AbortSignal.timeout(15000),
     });
     if (r.ok) {
@@ -219,6 +222,14 @@ export async function POST(request: Request) {
           } catch (e) {
             console.error("[chat persist]", e);
           }
+          // This conversation is memory, not a side channel: every other
+          // surface feeds episodes, and chat was the one that did not, so what
+          // you said to Curly was invisible to recall afterwards. Best-effort —
+          // a down core must not cost you the answer you already have.
+          void ingestToCore(
+            `User: ${question}\nCurly: ${assistant}`,
+            `curly-chat:${sessionId}`,
+          ).catch(() => undefined);
         }
         send("result", { result: assistant, sessionId, totalCostUsd: cost });
         send("end", { exitCode: 0, chatId: sessionId });

@@ -1,12 +1,19 @@
 import { ShellFrame } from "@/components/shell/ShellFrame";
+import { ChatHistory } from "@/components/chat/ChatHistory";
 
-// Chat routes sit outside the (shell) route group, so they would otherwise
-// inherit no dock. This layout adds the shared chrome (dock + full-height
-// main) so /chat and /chat/[id] render consistently with other OS routes.
+// Chat is a mode, not a surface: the rail stays, and the conversation list sits
+// beside it so past chats are reachable.
 export default function ChatLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  return <ShellFrame fullHeight>{children}</ShellFrame>;
+  return (
+    <ShellFrame fullHeight>
+      <div className="flex h-full min-h-0 w-full">
+        <ChatHistory />
+        <div className="flex min-w-0 flex-1 flex-col">{children}</div>
+      </div>
+    </ShellFrame>
+  );
 }
