@@ -3,10 +3,6 @@ import { Geist, Geist_Mono } from "next/font/google";
 import { headers } from "next/headers";
 import { isAllowed } from "@/lib/auth";
 import { CommandPalette } from "@/components/CommandPalette";
-import { CurlyOrb } from "@/components/CurlyOrb";
-import { FloatingNav } from "@/components/shell/FloatingNav";
-import { CurlyPanel } from "@/components/voice/CurlyPanel";
-import { RouteBeacon } from "@/components/voice/RouteBeacon";
 import { ToastProvider } from "@/components/ui/ToastProvider";
 import { VoiceProvider } from "@/lib/voice/VoiceContext";
 import "./globals.css";
@@ -46,10 +42,6 @@ export default async function RootLayout({
           <ToastProvider>
             {children}
             {allowed && <CommandPalette />}
-            {allowed && <FloatingNav />}
-            {allowed && <CurlyOrb />}
-            {allowed && <CurlyPanel />}
-            {allowed && <RouteBeacon />}
           </ToastProvider>
         </VoiceProvider>
       </body>

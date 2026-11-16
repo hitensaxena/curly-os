@@ -1,8 +1,7 @@
 import { ShellFrame } from "@/components/shell/ShellFrame";
 
-// Persistent OS chrome for the (shell) route group. The global CurlyOrb and
-// CommandPalette live in the root layout so they overlay every shell route.
-// ShellFrame handles the left dock + main with orb clearance.
+// Shell for the four primary surfaces. Navigation is a fixed rail and a single
+// search field (ShellFrame); the command palette remains global for ⌘K.
 export default function ShellLayout({
   children,
 }: {

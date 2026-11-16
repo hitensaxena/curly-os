@@ -1,10 +1,9 @@
-// Shell content frame. Navigation is a floating top-left menu button
-// (FloatingNav) and Curly is a floating bottom-right orb — both mounted globally
-// in the root layout — so the frame is just the full-bleed content region.
-//
-// Full-height routes (chat, surface) fill the viewport so their own internal
-// scroll / centering works; normal routes scroll the window. On small screens a
-// little top padding keeps page headings clear of the floating menu button.
+import { Rail } from "@/components/shell/Rail";
+import { TopBar } from "@/components/shell/TopBar";
+
+// The shell: a fixed rail, one search field, and the page. No floating orb,
+// voice panel or popover menu layered over every screen — those made a memory
+// browser feel like an app you had to learn.
 export function ShellFrame({
   children,
   fullHeight = false,
@@ -12,15 +11,19 @@ export function ShellFrame({
   children: React.ReactNode;
   fullHeight?: boolean;
 }) {
-  if (fullHeight) {
-    return (
-      <main
-        className="flex w-full flex-col overflow-hidden max-sm:pt-14"
-        style={{ height: "100dvh" }}
-      >
-        {children}
-      </main>
-    );
-  }
-  return <main className="min-h-screen w-full max-sm:pt-14">{children}</main>;
+  return (
+    <div className="min-h-screen w-full md:pl-52">
+      <Rail />
+      <div className="flex min-h-screen flex-col pb-14 md:pb-0">
+        <TopBar />
+        {fullHeight ? (
+          <main className="flex flex-1 flex-col overflow-hidden" style={{ height: "calc(100dvh - 57px)" }}>
+            {children}
+          </main>
+        ) : (
+          <main className="flex-1">{children}</main>
+        )}
+      </div>
+    </div>
+  );
 }
