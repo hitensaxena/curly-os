@@ -46,6 +46,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/episodes", label: "Episodes", Icon: LayersIcon },
       { href: "/logs", label: "Logs", Icon: TerminalIcon },
       { href: "/systems", label: "Systems", Icon: PulseIcon },
+      { href: "/settings", label: "Settings", Icon: SettingsIcon },
     ],
   },
 ];
@@ -53,6 +54,15 @@ export const NAV_GROUPS: NavGroup[] = [
 // Flat list (Home + every grouped item) — kept for any consumer that wants the
 // ungrouped set.
 export const NAV: NavItem[] = [NAV_HOME, ...NAV_GROUPS.flatMap((g) => g.items)];
+
+function SettingsIcon(p: SVGProps<SVGSVGElement>) {
+  return (
+    <svg width="16" height="16" {...base} {...p}>
+      <circle cx="12" cy="12" r="3" />
+      <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-2.9 1.2V21a2 2 0 1 1-4 0v-.1A1.7 1.7 0 0 0 7 19.4a1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1A1.7 1.7 0 0 0 3 14a1.7 1.7 0 0 0-1.6-1H1a2 2 0 1 1 0-4h.1A1.7 1.7 0 0 0 3 7.6a1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1A1.7 1.7 0 0 0 9 3V3a2 2 0 1 1 4 0v.1A1.7 1.7 0 0 0 15 4.6a1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1A1.7 1.7 0 0 0 21 9h.1a2 2 0 1 1 0 4H21a1.7 1.7 0 0 0-1.6 2Z" />
+    </svg>
+  );
+}
 
 const base = {
   fill: "none",

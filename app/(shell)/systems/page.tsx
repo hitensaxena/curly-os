@@ -10,23 +10,25 @@ import type {
 } from "@/lib/curlyos-types";
 import { relTime } from "@/lib/format";
 
-// Engines whose name matches a key here get action button(s); the rest are read-only.
+// Keyed by the engine registry's own names. It used to key on the five
+// hand-written pseudo-engines the API used to report ("consolidation",
+// "reflection", "meta"), none of which matched a real engine, so no trigger
+// button ever rendered.
 const ENGINE_TRIGGERS: Record<
   string,
   { label: string; path: string; body?: Record<string, unknown> }[]
 > = {
-  consolidation: [
+  consolidation_fast: [
     { label: "Run fast", path: "/api/consolidation/run", body: { mode: "fast" } },
+  ],
+  consolidation_deep: [
     { label: "Run deep", path: "/api/consolidation/run", body: { mode: "deep" } },
   ],
-  reflection: [
-    { label: "Weekly", path: "/api/reflection/weekly" },
-    { label: "Monthly", path: "/api/reflection/monthly" },
-  ],
-  meta: [
-    { label: "Audit", path: "/api/meta/audit" },
-    { label: "Distill", path: "/api/meta/distill" },
-  ],
+  reflection_weekly: [{ label: "Run weekly", path: "/api/reflection/weekly" }],
+  reflection_monthly: [{ label: "Run monthly", path: "/api/reflection/monthly" }],
+  meta_audit: [{ label: "Audit", path: "/api/meta/audit" }],
+  narrative_generate: [{ label: "Generate", path: "/api/narrative/generate" }],
+  attention_scan: [{ label: "Scan", path: "/api/attention/scan" }],
 };
 
 type TriggerState = {
@@ -237,28 +239,36 @@ function EngineCard({
   const buttons = ENGINE_TRIGGERS[eng.name] ?? [];
   const recent = eng.recent ?? [];
   const resultErr = trig?.result?.error;
+  const title = eng.name
+    .split("_")
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
 
   return (
     <div className="rounded-lg border border-border bg-surface p-4">
       <div className="flex flex-wrap items-start justify-between gap-2">
-        <div>
-          <div className="text-sm font-semibold text-foreground">{eng.label}</div>
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-semibold text-foreground">{title}</span>
+            {eng.enabled === false && (
+              <span className="rounded-full border border-border px-2 py-0.5 text-[10px] text-muted">
+                disabled
+              </span>
+            )}
+          </div>
           {eng.error ? (
             <p className="text-xs text-red-400 mt-1">{eng.error}</p>
           ) : (
-            <p className="text-xs text-muted mt-1" title={whenAbsolute(eng.last_run)}>
-              Last run {whenLabel(eng.last_run)}
-              {eng.last_event_type ? ` · ${eng.last_event_type}` : ""}
-            </p>
+            <>
+              {eng.label && <p className="text-xs text-muted mt-1">{eng.label}</p>}
+              <p className="text-xs text-muted mt-1" title={whenAbsolute(eng.last_run)}>
+                {eng.schedule ? `${eng.schedule} · ` : ""}
+                last run {whenLabel(eng.last_run)}
+                {eng.last_status && eng.last_status !== "never" ? ` · ${eng.last_status}` : ""}
+              </p>
+              {eng.last_error && <p className="text-xs text-red-400 mt-1">{eng.last_error}</p>}
+            </>
           )}
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="rounded-full border border-border px-2 py-0.5 text-[10px] text-muted">
-            {eng.runs_24h ?? 0} · 24h
-          </span>
-          <span className="rounded-full border border-border px-2 py-0.5 text-[10px] text-muted">
-            {eng.runs_7d ?? 0} · 7d
-          </span>
         </div>
       </div>
 

@@ -203,13 +203,20 @@ export interface SystemEngineEvent {
   data: Record<string, unknown>;
 }
 
+// Mirrors GET /api/systems → engines[], which now comes from the engine
+// registry and the scheduler snapshot rather than event-type matching.
 export interface SystemEngine {
   name: string;
   label: string;
+  category?: string | null;
+  schedule?: string | null;
+  enabled?: boolean;
+  inputs?: string[];
+  outputs?: string[];
   last_run?: string | null;
-  last_event_type?: string | null;
+  last_status?: string | null;
+  last_error?: string | null;
   runs_24h?: number;
-  runs_7d?: number;
   recent?: SystemEngineEvent[];
   error?: string;
 }
