@@ -97,6 +97,11 @@ const DEGREE_PRESETS: { label: string; min: number }[] = [
 
 export default function GraphPage() {
   const [nodes, setNodes] = useState<GraphNode[]>([]);
+  // Rendering the full graph (26k nodes, 44k edges) stalls the force simulation
+  // and reads as noise. Show the densest slice, let the model be explored by
+  // search instead of by zooming out.
+  const [budget, setBudget] = useState(400);
+  const [totalEntities, setTotalEntities] = useState<number | null>(null);
   const [links, setLinks] = useState<GraphLink[]>([]);
   const [selected, setSelected] = useState<GraphNode | null>(null);
   const [expansion, setExpansion] = useState<Expansion | null>(null);
@@ -114,7 +119,7 @@ export default function GraphPage() {
   const fgRef = useRef<any>(null);
 
   useEffect(() => {
-    fetch(`${API}/api/graph?limit=50000`, { signal: AbortSignal.timeout(60_000) })
+    fetch(`${API}/api/graph?limit=${budget}&edges_per_node=12`, { signal: AbortSignal.timeout(60_000) })
       .then((r) => {
         if (!r.ok) throw new Error(`graph → ${r.status}`);
         return r.json();
@@ -122,6 +127,7 @@ export default function GraphPage() {
       .then((d) => {
         setNodes(d.nodes || []);
         setLinks(d.links || []);
+        setTotalEntities(typeof d.total === "number" ? d.total : null);
         setLoading(false);
       })
       .catch(() => {
@@ -129,7 +135,7 @@ export default function GraphPage() {
         setLinks([]);
         setLoading(false);
       });
-  }, []);
+  }, [budget]);
 
   const fetchExpansion = useCallback((nodeId: string, hops: 1 | 2 | 3) => {
     setExpandLoading(true);
@@ -403,13 +409,31 @@ export default function GraphPage() {
           className="relative overflow-hidden rounded-lg border border-border bg-surface lg:col-span-3"
           style={{ height: "72vh" }}
         >
-          <div className="pointer-events-none absolute left-3 top-3 z-10 rounded-md bg-background/70 px-2 py-1 text-[10px] text-muted backdrop-blur">
-            showing {graphData.nodes.length} / {nodes.length} nodes · {graphData.links.length} edges
+          <div className="absolute left-3 top-3 z-10 flex items-center gap-2 rounded-md bg-background/80 px-2 py-1 text-[10px] text-muted backdrop-blur">
+            <span>
+              {graphData.nodes.length} nodes · {graphData.links.length} edges
+              {totalEntities ? ` · of ${totalEntities.toLocaleString()} entities` : ""}
+            </span>
+            <span className="text-muted/50">|</span>
+            {[200, 400, 1000].map((n) => (
+              <button
+                key={n}
+                onClick={() => setBudget(n)}
+                className={`rounded px-1.5 py-0.5 ${
+                  budget === n ? "bg-surface text-foreground" : "hover:text-foreground"
+                }`}
+              >
+                {n}
+              </button>
+            ))}
           </div>
           <ForceGraph2D
             ref={fgRef}
             graphData={graphData}
-            cooldownTicks={120}
+            cooldownTicks={90}
+            warmupTicks={15}
+            d3AlphaDecay={0.06}
+            d3VelocityDecay={0.4}
             nodeRelSize={5}
             nodeVal={(n: any) => Math.max(1.2, Math.sqrt(n.degree || 1) * 1.6)}
             nodeLabel={(n: any) => `${n.name} · ${n.label} · deg ${n.degree}`}
