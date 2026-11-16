@@ -3,7 +3,6 @@
 import Link from "next/link";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { noteHref } from "@/lib/vault-paths";
 
 // Shared prose renderer (GFM). A bare inline `filename.md` becomes a link into
 // the notes reader — the same citation affordance the chat uses, pointed at the
@@ -40,13 +39,12 @@ export function Markdown({
               );
             }
             if (/^[\w./-]+\.md$/.test(text) && !text.startsWith("/")) {
+              // /notes was removed; linking to it produced a 404. Render the
+              // path as a code chip instead of a dead link.
               return (
-                <Link
-                  href={noteHref(text)}
-                  className="rounded bg-surface-2 px-1.5 py-0.5 font-mono text-[0.85em] text-foreground underline decoration-dotted underline-offset-2 hover:bg-surface-3"
-                >
+                <code className="rounded bg-surface-2 px-1.5 py-0.5 font-mono text-[0.85em] text-foreground">
                   {text}
-                </Link>
+                </code>
               );
             }
             return <code {...rest}>{kids}</code>;

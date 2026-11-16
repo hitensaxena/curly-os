@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useToast } from "@/components/ui/ToastProvider";
+import { NAV as NAV_ALL } from "@/components/shell/nav";
 import { streamChat } from "@/lib/use-chat-stream";
 import { Markdown } from "@/components/Markdown";
 
@@ -23,16 +24,15 @@ type SearchResponse = {
 
 type NavItem = { id: string; label: string; hint: string; path: string };
 
-const NAV: NavItem[] = [
-  { id: "home", label: "Home", hint: "/", path: "/" },
-  { id: "memory", label: "Memory", hint: "/memory", path: "/memory" },
-  { id: "identity", label: "Identity", hint: "/identity", path: "/identity" },
-  { id: "graph", label: "Knowledge graph", hint: "/graph", path: "/graph" },
-  { id: "goals", label: "Goals", hint: "/goals", path: "/goals" },
-  { id: "search", label: "Search your mind", hint: "/search", path: "/search" },
-  { id: "chat", label: "New chat with Curly", hint: "/chat", path: "/chat" },
-  { id: "surface", label: "Voice surface", hint: "/surface", path: "/surface" },
-];
+// Derived from the navigation model so the palette cannot drift out of sync
+// with the menu again (it was missing Self, Cognition, Opportunities,
+// Decisions, Episodes, Logs, Systems and Settings).
+const NAV: NavItem[] = NAV_ALL.map((item) => ({
+  id: item.label.toLowerCase().replace(/\s+/g, "-"),
+  label: item.label,
+  hint: item.href,
+  path: item.href,
+}));
 
 function parseQuery(raw: string): { mode: Mode; term: string } {
   if (raw.startsWith("?")) return { mode: "ask", term: raw.slice(1).trim() };

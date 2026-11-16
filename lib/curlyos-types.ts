@@ -362,26 +362,6 @@ export interface ResolveOpportunityResult {
   resolution: string;
 }
 
-// --- Decision Council --------------------------------------------------------
-
-export interface CouncilPerspective {
-  perspective: string;
-  view: string;
-}
-
-export interface CouncilResult {
-  dec_id: string;
-  perspectives: CouncilPerspective[];
-  synthesis: string;
-}
-
-// Extended Decision with optional council
-export interface DecisionWithCouncil extends Decision {
-  properties?: {
-    council?: CouncilResult;
-  };
-}
-
 // --- Background jobs (shared/scheduler.py) -----------------------------------
 export interface ScheduledJob {
   name: string;

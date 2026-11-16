@@ -4,7 +4,6 @@ import type {
   CreateDecisionBody,
   CreateGoalBody,
   Decision,
-  DecisionWithCouncil,
   EngineTriggerResult,
   EventItem,
   Goal,
@@ -165,12 +164,12 @@ export async function reviewDecision(
 
 export function getDecisionsWithCouncil(
   dueForReview?: boolean,
-): Promise<{ items: DecisionWithCouncil[]; count: number }> {
+): Promise<{ items: Decision[]; count: number }> {
   const q =
     dueForReview !== undefined
       ? `?due_for_review=${dueForReview ? "true" : "false"}`
       : "";
-  return getJSON<{ items: DecisionWithCouncil[]; count: number }>(`/api/decisions${q}`);
+  return getJSON<{ items: Decision[]; count: number }>(`/api/decisions${q}`);
 }
 
 // --- Opportunities -----------------------------------------------------------

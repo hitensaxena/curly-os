@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useVoice } from "@/lib/voice/VoiceContext";
 import { Markdown } from "@/components/Markdown";
 import { GraphPanel } from "@/components/stage/GraphPanel";
-import { noteHref } from "@/lib/vault-paths";
 import { resolveTarget } from "@/lib/stage-targets";
 
 // Curly's integrated surface: a right-side slide-over (bottom sheet on mobile)
@@ -189,13 +188,7 @@ export function CurlyPanel() {
 
         {src && (
           <footer className="border-t border-border px-4 py-2.5">
-            <Link
-              href={noteHref(src)}
-              onClick={v.closePanel}
-              className="text-xs text-accent-2 hover:underline"
-            >
-              Open in notes → {src}
-            </Link>
+            <span className="font-mono text-xs text-muted">{src}</span>
           </footer>
         )}
       </aside>

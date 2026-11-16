@@ -9,11 +9,9 @@ import {
   reviewDecision,
 } from "@/lib/curlyos";
 import type {
-  CouncilPerspective,
-  CouncilResult,
   CreateDecisionBody,
   DecisionReversibility,
-  DecisionWithCouncil,
+  Decision,
   Goal,
 } from "@/lib/curlyos-types";
 
@@ -185,7 +183,7 @@ function NewDecisionForm({ goals, onSave, onCancel }: NewDecisionFormProps) {
 // ── outcome form ──────────────────────────────────────────────────────────────
 
 interface OutcomeFormProps {
-  decision: DecisionWithCouncil;
+  decision: Decision;
   onDone: () => void;
 }
 
@@ -232,84 +230,8 @@ function OutcomeForm({ decision, onDone }: OutcomeFormProps) {
   );
 }
 
-// ── council report ────────────────────────────────────────────────────────────
-
-const PERSPECTIVE_COLORS: Record<string, string> = {
-  skeptic: "text-red-400 border-red-400/30 bg-red-400/5",
-  champion: "text-green-400 border-green-400/30 bg-green-400/5",
-  operator: "text-blue-400 border-blue-400/30 bg-blue-400/5",
-  outsider: "text-purple-400 border-purple-400/30 bg-purple-400/5",
-};
-
-function PerspectiveBlock({ p }: { p: CouncilPerspective }) {
-  const [open, setOpen] = useState(false);
-  const key = p.perspective.toLowerCase();
-  const cls = PERSPECTIVE_COLORS[key] ?? "text-muted border-border bg-surface-2/30";
-  return (
-    <div className={`rounded border ${cls} overflow-hidden`}>
-      <button
-        onClick={() => setOpen((v) => !v)}
-        className="w-full flex items-center justify-between px-3 py-2 text-left"
-      >
-        <span className="text-[11px] font-semibold uppercase tracking-wide">
-          {p.perspective}
-        </span>
-        <span className="text-[10px] text-muted">{open ? "▲" : "▼"}</span>
-      </button>
-      {open && (
-        <div className="px-3 pb-3">
-          <p className="text-xs text-muted leading-relaxed">{p.view}</p>
-        </div>
-      )}
-    </div>
-  );
-}
-
-interface CouncilReportProps {
-  council: CouncilResult;
-  defaultOpen?: boolean;
-}
-
-function CouncilReport({ council, defaultOpen = false }: CouncilReportProps) {
-  const [open, setOpen] = useState(defaultOpen);
-  return (
-    <div className="mt-3 rounded-lg border border-border bg-surface-2/20 overflow-hidden">
-      <button
-        onClick={() => setOpen((v) => !v)}
-        className="w-full flex items-center justify-between px-4 py-2 text-left hover:bg-surface-2/40"
-      >
-        <span className="text-[10px] font-semibold uppercase tracking-wide text-muted">
-          Council report
-        </span>
-        <span className="text-[10px] text-muted">{open ? "Hide" : "Show council"}</span>
-      </button>
-      {open && (
-        <div className="px-4 pb-4 space-y-3">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            {council.perspectives.map((p) => (
-              <PerspectiveBlock key={p.perspective} p={p} />
-            ))}
-          </div>
-          {council.synthesis && (
-            <div className="rounded border border-accent/30 bg-accent/5 px-3 py-2">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-accent mb-1">
-                Synthesis
-              </p>
-              <p className="text-xs text-foreground leading-relaxed">
-                {council.synthesis}
-              </p>
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ── decision card ─────────────────────────────────────────────────────────────
-
 interface DecisionCardProps {
-  decision: DecisionWithCouncil;
+  decision: Decision;
   showOutcomeForm: boolean;
   onToggleOutcome: () => void;
   onOutcomeSaved: () => void;
@@ -321,7 +243,6 @@ function DecisionCard({
   onToggleOutcome,
   onOutcomeSaved,
 }: DecisionCardProps) {
-  const existingCouncil = decision.properties?.council ?? null;
 
   return (
     <div className="rounded-lg border border-border bg-surface p-4">
@@ -398,7 +319,6 @@ function DecisionCard({
         />
       )}
 
-      {existingCouncil && <CouncilReport council={existingCouncil} />}
     </div>
   );
 }
@@ -406,8 +326,8 @@ function DecisionCard({
 // ── page ──────────────────────────────────────────────────────────────────────
 
 export default function DecisionsPage() {
-  const [dueDecisions, setDueDecisions] = useState<DecisionWithCouncil[]>([]);
-  const [allDecisions, setAllDecisions] = useState<DecisionWithCouncil[]>([]);
+  const [dueDecisions, setDueDecisions] = useState<Decision[]>([]);
+  const [allDecisions, setAllDecisions] = useState<Decision[]>([]);
   const [goals, setGoals] = useState<Goal[]>([]);
   const [loading, setLoading] = useState(true);
   const [showNew, setShowNew] = useState(false);
@@ -416,8 +336,8 @@ export default function DecisionsPage() {
   const load = () => {
     setLoading(true);
     Promise.all([
-      getDecisionsWithCouncil(true).catch(() => ({ items: [] as DecisionWithCouncil[], count: 0 })),
-      getDecisionsWithCouncil(false).catch(() => ({ items: [] as DecisionWithCouncil[], count: 0 })),
+      getDecisionsWithCouncil(true).catch(() => ({ items: [] as Decision[], count: 0 })),
+      getDecisionsWithCouncil(false).catch(() => ({ items: [] as Decision[], count: 0 })),
       getGoals().catch(() => ({ items: [] as Goal[], count: 0 })),
     ]).then(([due, all, gs]) => {
       setDueDecisions(due.items);
