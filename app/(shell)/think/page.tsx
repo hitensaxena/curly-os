@@ -7,6 +7,7 @@
 import GoalsPanel from "@/components/think/GoalsPanel";
 import DecisionsPanel from "@/components/think/DecisionsPanel";
 import OpportunitiesPanel from "@/components/think/OpportunitiesPanel";
+import AdvancedPanel from "@/components/think/AdvancedPanel";
 import {
   ContradictionsPanel,
   CuriosityPanel,
@@ -24,7 +25,8 @@ type Tab =
   | "goals"
   | "decisions"
   | "opportunities"
-  | "narrative";
+  | "narrative"
+  | "advanced";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "attention", label: "Needs you" },
@@ -32,6 +34,7 @@ const TABS: { id: Tab; label: string }[] = [
   { id: "goals", label: "Goals" },
   { id: "decisions", label: "Decisions" },
   { id: "opportunities", label: "Opportunities" },
+  { id: "advanced", label: "Advanced" },
 ];
 
 export default function ThinkPage() {
@@ -102,15 +105,19 @@ export default function ThinkPage() {
           ) : (
             <p className="text-sm text-muted">No chapter has been composed yet.</p>
           )}
-          <Link href="/cognition#meta" className="mt-6 inline-block text-xs text-muted hover:text-foreground">
+          <button
+            onClick={() => setTab("advanced")}
+            className="mt-6 inline-block text-xs text-muted hover:text-foreground"
+          >
             advanced: meta-cognition, reflection and attention →
-          </Link>
+          </button>
         </section>
       )}
 
       {tab === "goals" && <GoalsPanel />}
       {tab === "decisions" && <DecisionsPanel />}
       {tab === "opportunities" && <OpportunitiesPanel />}
+      {tab === "advanced" && <AdvancedPanel />}
     </div>
   );
 }
