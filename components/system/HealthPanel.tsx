@@ -117,9 +117,7 @@ export default function SystemsPage() {
     : [];
 
   return (
-    <div className="mx-auto w-full max-w-5xl px-5 py-8 sm:px-8">
-      <h1 className="text-2xl font-bold text-foreground mb-1">Systems</h1>
-      <p className="text-sm text-muted mb-6">Live status of every CurlyOS subsystem and autonomous engine</p>
+    <div className="mx-auto w-full max-w-5xl">
 
       {/* Cognitive heartbeat — the background scheduler that drives every engine */}
       {data?.scheduler && (

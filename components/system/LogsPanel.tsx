@@ -41,9 +41,7 @@ export default function LogsPage() {
   }, []);
 
   return (
-    <div className="mx-auto w-full max-w-5xl px-5 py-8 sm:px-8">
-      <h1 className="text-2xl font-bold text-foreground mb-1">Logs</h1>
-      <p className="text-sm text-muted mb-6">Latest server logs and the live activity feed</p>
+    <div className="mx-auto w-full max-w-5xl">
 
       {/* Tabs */}
       <div className="flex gap-1 mb-6 border-b border-border">

@@ -16,7 +16,7 @@ export function PageHeading({
   actions,
   tone = "default",
 }: {
-  title: string;
+  title?: string;
   subtitle?: string;
   eyebrow?: string;
   actions?: ReactNode;
@@ -36,9 +36,11 @@ export function PageHeading({
             {eyebrow}
           </p>
         )}
-        <h1 className={`text-2xl font-semibold text-foreground ${titleGlow}`}>
-          {title}
-        </h1>
+        {title ? (
+          <h1 className={`text-2xl font-semibold text-foreground ${titleGlow}`}>
+            {title}
+          </h1>
+        ) : null}
         {subtitle && (
           <p className="mt-1 text-sm text-muted">{subtitle}</p>
         )}

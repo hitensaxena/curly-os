@@ -213,11 +213,7 @@ export default function SettingsPage() {
   const tiers = overview?.llm?.tiers ?? {};
 
   return (
-    <div className="mx-auto w-full max-w-5xl px-5 py-8 sm:px-8">
-      <h1 className="mb-1 text-2xl font-bold text-foreground">Settings</h1>
-      <p className="mb-6 text-sm text-muted">
-        Live configuration, read from and written to the core. Changes take effect on the next request.
-      </p>
+    <div className="mx-auto w-full max-w-5xl">
 
       <section className="mb-8 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {[

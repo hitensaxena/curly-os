@@ -431,7 +431,6 @@ export default function OpportunitiesPage() {
   return (
     <div className="mx-auto w-full max-w-4xl px-5 py-8 sm:px-8">
       <PageHeading
-        title="Opportunities"
         subtitle={
           loading
             ? "Loading..."
